@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
-    // listen on loopback interface and random port.
+    // listen on all ipv4 and ipv6 addresses and random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
 
