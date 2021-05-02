@@ -10,6 +10,8 @@ use libp2p::NetworkBehaviour;
 use libp2p::{identity, PeerId};
 use std::error::Error;
 use std::task::Poll;
+use std::time::Duration;
+use wasm_timer::Delay;
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
@@ -83,19 +85,50 @@ fn main() -> Result<(), Box<dyn Error>> {
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
 
     // start main loop
+    let mut timer = Delay::new(Duration::new(5, 0));
     let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => println!("{:?}", event),
-            Poll::Ready(None) => return Poll::Ready(Ok(())),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {:?}", addr);
-                        listening = true;
+    block_on(future::poll_fn(move |cx| {
+        loop {
+            // handle swarm events
+            let mut swarm_pending = false;
+            match swarm.poll_next_unpin(cx) {
+                Poll::Ready(Some(event)) => println!("{:?}", event),
+                Poll::Ready(None) => {
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Pending => {
+                    if !listening {
+                        for addr in Swarm::listeners(&swarm) {
+                            println!("Listening on {:?}", addr);
+                            listening = true;
+                        }
+                    }
+                    swarm_pending = true;
+                }
+            }
+
+            // handle timer events
+            match timer.poll_unpin(cx) {
+                Poll::Pending => {
+                    if swarm_pending {
+                        return Poll::Pending;
                     }
                 }
-                return Poll::Pending;
+                Poll::Ready(Ok(())) => {
+                    println!("timer");
+
+                    // publish message
+                    swarm
+                        .behaviour_mut()
+                        .floodsub
+                        .publish(floodsub_topic.clone(), "hi".as_bytes());
+
+                    // reset timer
+                    timer.reset(Duration::new(5, 0));
+                }
+                Poll::Ready(Err(_)) => {
+                    panic!("timer error");
+                }
             }
         }
     }))
