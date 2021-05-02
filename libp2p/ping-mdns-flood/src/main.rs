@@ -14,6 +14,10 @@ use std::task::Poll;
 use std::time::Duration;
 use wasm_timer::Delay;
 
+// key pair and peer id
+static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
+static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from(KEYS.public()));
+
 // floodsub topic
 static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
 
@@ -76,16 +80,14 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for PingBehaviour {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
+    // show peer id
+    println!("Local peer id: {:?}", PEER_ID);
 
     // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
+    let transport = block_on(libp2p::development_transport(KEYS.clone()))?;
 
     // create floodsub
-    let mut floodsub = Floodsub::new(local_peer_id.clone());
+    let mut floodsub = Floodsub::new(PEER_ID.clone());
 
     // subscribe to floodsub topic
     floodsub.subscribe(TOPIC.clone());
@@ -97,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = PingBehaviour { floodsub, mdns };
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    let mut swarm = Swarm::new(transport, behaviour, PEER_ID.clone());
 
     // listen on all ipv4 and ipv6 addresses and random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
