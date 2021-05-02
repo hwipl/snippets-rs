@@ -13,6 +13,10 @@ use std::task::Poll;
 use std::time::Duration;
 use wasm_timer::Delay;
 
+// ping and pong messages
+const PING: &[u8] = "ping".as_bytes();
+const PONG: &[u8] = "pong".as_bytes();
+
 // floodsub topic
 const TOPIC: &str = "/hello/world";
 
@@ -27,11 +31,24 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for PingBehaviour {
     // Called when `floodsub` produces an event.
     fn inject_event(&mut self, message: FloodsubEvent) {
         if let FloodsubEvent::Message(message) = message {
-            println!(
-                "Received: '{:?}' from {:?}",
-                String::from_utf8_lossy(&message.data),
-                message.source
-            );
+            let floodsub_topic = floodsub::Topic::new(TOPIC);
+            let data = String::from_utf8_lossy(&message.data);
+
+            // handle message types "ping" and "pong"
+            match data.as_ref() {
+                "ping" => {
+                    // received ping, send pong
+                    self.floodsub.publish(floodsub_topic.clone(), PONG);
+                }
+                "pong" => {
+                    // received pong
+                    println!("Received ping reply from {:?}", message.source);
+                }
+                _ => {
+                    // handle unknown messages
+                    println!("Received unknown message from {:?}", message.source);
+                }
+            }
         }
     }
 }
@@ -118,13 +135,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 Poll::Ready(Ok(())) => {
-                    println!("timer");
-
                     // publish message
+                    println!("Sending ping");
                     swarm
                         .behaviour_mut()
                         .floodsub
-                        .publish(floodsub_topic.clone(), "hi".as_bytes());
+                        .publish(floodsub_topic.clone(), PING);
 
                     // reset timer
                     timer.reset(Duration::new(5, 0));
