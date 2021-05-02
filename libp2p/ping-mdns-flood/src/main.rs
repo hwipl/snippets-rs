@@ -84,7 +84,10 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for PingBehaviour {
                 }
                 PONG => {
                     // received pong, check if it is for us
-                    let peer = PeerId::from_bytes(&msg.peer).unwrap();
+                    let peer = match PeerId::from_bytes(&msg.peer) {
+                        Ok(peer) => peer,
+                        Err(_) => return,
+                    };
                     if peer != PEER_ID.clone() {
                         return;
                     }
