@@ -9,6 +9,7 @@ use libp2p::swarm::Swarm;
 use libp2p::NetworkBehaviour;
 use libp2p::{identity, PeerId};
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
@@ -21,9 +22,41 @@ static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from(KEYS.public()));
 // floodsub topic
 static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
 
-// ping and pong messages
-const PING: &[u8] = "ping".as_bytes();
-const PONG: &[u8] = "pong".as_bytes();
+// ping message
+#[derive(Debug, Serialize, Deserialize)]
+struct PingMessage {
+    request: u8,
+    peer: Vec<u8>,
+}
+
+// ping and pong request types
+const PING: u8 = 0;
+const PONG: u8 = 1;
+
+impl PingMessage {
+    // parse ping message
+    fn parse(data: &[u8]) -> Result<Self, serde_cbor::Error> {
+        serde_cbor::from_slice(data)
+    }
+
+    // create ping message bytes
+    fn ping() -> Vec<u8> {
+        serde_cbor::to_vec(&PingMessage {
+            request: PING,
+            peer: vec![0],
+        })
+        .unwrap()
+    }
+
+    // create pong message bytes
+    fn pong(peer: PeerId) -> Vec<u8> {
+        serde_cbor::to_vec(&PingMessage {
+            request: PONG,
+            peer: peer.to_bytes(),
+        })
+        .unwrap()
+    }
+}
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
@@ -36,16 +69,25 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for PingBehaviour {
     // Called when `floodsub` produces an event.
     fn inject_event(&mut self, message: FloodsubEvent) {
         if let FloodsubEvent::Message(message) = message {
-            let data = String::from_utf8_lossy(&message.data);
+            // parse ping message
+            let msg = match PingMessage::parse(&message.data) {
+                Ok(ping) => ping,
+                Err(_) => return,
+            };
 
-            // handle message types "ping" and "pong"
-            match data.as_ref() {
-                "ping" => {
+            // handle ping message types "ping" and "pong"
+            match msg.request {
+                PING => {
                     // received ping, send pong
-                    self.floodsub.publish(TOPIC.clone(), PONG);
+                    self.floodsub
+                        .publish(TOPIC.clone(), PingMessage::pong(message.source));
                 }
-                "pong" => {
-                    // received pong
+                PONG => {
+                    // received pong, check if it is for us
+                    let peer = PeerId::from_bytes(&msg.peer).unwrap();
+                    if peer != PEER_ID.clone() {
+                        return;
+                    }
                     println!("Received ping reply from {:?}", message.source);
                 }
                 _ => {
@@ -138,7 +180,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Poll::Ready(Ok(())) => {
                     // publish message
                     println!("Sending ping");
-                    swarm.behaviour_mut().floodsub.publish(TOPIC.clone(), PING);
+                    swarm
+                        .behaviour_mut()
+                        .floodsub
+                        .publish(TOPIC.clone(), PingMessage::ping());
 
                     // reset timer
                     timer.reset(Duration::new(5, 0));
