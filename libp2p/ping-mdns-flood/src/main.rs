@@ -2,23 +2,24 @@
 
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::floodsub::{self, Floodsub, FloodsubEvent};
+use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
 use libp2p::swarm::NetworkBehaviourEventProcess;
 use libp2p::swarm::Swarm;
 use libp2p::NetworkBehaviour;
 use libp2p::{identity, PeerId};
+use once_cell::sync::Lazy;
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
 use wasm_timer::Delay;
 
+// floodsub topic
+static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
+
 // ping and pong messages
 const PING: &[u8] = "ping".as_bytes();
 const PONG: &[u8] = "pong".as_bytes();
-
-// floodsub topic
-const TOPIC: &str = "/hello/world";
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
@@ -31,14 +32,13 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for PingBehaviour {
     // Called when `floodsub` produces an event.
     fn inject_event(&mut self, message: FloodsubEvent) {
         if let FloodsubEvent::Message(message) = message {
-            let floodsub_topic = floodsub::Topic::new(TOPIC);
             let data = String::from_utf8_lossy(&message.data);
 
             // handle message types "ping" and "pong"
             match data.as_ref() {
                 "ping" => {
                     // received ping, send pong
-                    self.floodsub.publish(floodsub_topic.clone(), PONG);
+                    self.floodsub.publish(TOPIC.clone(), PONG);
                 }
                 "pong" => {
                     // received pong
@@ -87,9 +87,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create floodsub
     let mut floodsub = Floodsub::new(local_peer_id.clone());
 
-    // create and subscribe to floodsub topic
-    let floodsub_topic = floodsub::Topic::new(TOPIC);
-    floodsub.subscribe(floodsub_topic.clone());
+    // subscribe to floodsub topic
+    floodsub.subscribe(TOPIC.clone());
 
     // create mdns
     let mdns = block_on(Mdns::new(MdnsConfig::default()))?;
@@ -137,10 +136,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Poll::Ready(Ok(())) => {
                     // publish message
                     println!("Sending ping");
-                    swarm
-                        .behaviour_mut()
-                        .floodsub
-                        .publish(floodsub_topic.clone(), PING);
+                    swarm.behaviour_mut().floodsub.publish(TOPIC.clone(), PING);
 
                     // reset timer
                     timer.reset(Duration::new(5, 0));
