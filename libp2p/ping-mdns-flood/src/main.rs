@@ -13,6 +13,9 @@ use std::task::Poll;
 use std::time::Duration;
 use wasm_timer::Delay;
 
+// floodsub topic
+const TOPIC: &str = "/hello/world";
+
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
 struct PingBehaviour {
@@ -68,7 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut floodsub = Floodsub::new(local_peer_id.clone());
 
     // create and subscribe to floodsub topic
-    let floodsub_topic = floodsub::Topic::new("/hello/world");
+    let floodsub_topic = floodsub::Topic::new(TOPIC);
     floodsub.subscribe(floodsub_topic.clone());
 
     // create mdns
