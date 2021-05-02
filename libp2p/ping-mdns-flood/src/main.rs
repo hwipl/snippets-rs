@@ -106,14 +106,12 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for PingBehaviour {
             MdnsEvent::Discovered(list) => {
                 for (peer, _) in list {
                     self.floodsub.add_node_to_partial_view(peer);
-                    println!("mdns: added {:?} to floodsub", peer);
                 }
             }
             MdnsEvent::Expired(list) => {
                 for (peer, _) in list {
                     if !self.mdns.has_node(&peer) {
                         self.floodsub.remove_node_from_partial_view(&peer);
-                        println!("mdns: removed {:?} from floodsub", peer)
                     }
                 }
             }
@@ -123,7 +121,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for PingBehaviour {
 
 fn main() -> Result<(), Box<dyn Error>> {
     // show peer id
-    println!("Local peer id: {:?}", PEER_ID);
+    println!("Local node: {:?}", PEER_ID.clone());
 
     // create transport
     let transport = block_on(libp2p::development_transport(KEYS.clone()))?;
@@ -149,7 +147,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // start main loop
     let mut timer = Delay::new(Duration::new(5, 0));
-    let mut listening = false;
     block_on(future::poll_fn(move |cx| {
         loop {
             // handle swarm events
@@ -160,12 +157,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     return Poll::Ready(Ok(()));
                 }
                 Poll::Pending => {
-                    if !listening {
-                        for addr in Swarm::listeners(&swarm) {
-                            println!("Listening on {:?}", addr);
-                            listening = true;
-                        }
-                    }
                     swarm_pending = true;
                 }
             }
