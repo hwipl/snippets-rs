@@ -30,14 +30,14 @@ pub struct HelloWorld {
 pub struct HelloWorldEvent {
     /// The peer ID of the remote.
     pub peer: PeerId,
-    /// The result of an inbound or outbound ping.
+    /// The result of an inbound or outbound hello world message.
     pub result: HelloWorldResult,
 }
 
-/// The result of an inbound or outbound ping.
+/// The result of an inbound or outbound hello world message.
 pub type HelloWorldResult = Result<HelloWorldSuccess, HelloWorldFailure>;
 
-/// The successful result of processing an inbound or outbound ping.
+/// The successful result of processing an inbound or outbound hello world message.
 #[derive(Debug)]
 pub enum HelloWorldSuccess {
     /// Received a hello world message.
@@ -46,13 +46,12 @@ pub enum HelloWorldSuccess {
     Sent,
 }
 
-/// An outbound ping failure.
+/// An outbound hello world failure.
 #[derive(Debug)]
 pub enum HelloWorldFailure {
-    /// The ping timed out, i.e. no response was received within the
-    /// configured ping timeout.
+    /// The hello world timed out.
     Timeout,
-    /// The ping failed for reasons other than a timeout.
+    /// The hello world failed for reasons other than a timeout.
     Other {
         error: Box<dyn std::error::Error + Send + 'static>,
     },
@@ -61,8 +60,8 @@ pub enum HelloWorldFailure {
 impl fmt::Display for HelloWorldFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HelloWorldFailure::Timeout => f.write_str("Ping timeout"),
-            HelloWorldFailure::Other { error } => write!(f, "Ping error: {}", error),
+            HelloWorldFailure::Timeout => f.write_str("Hello world timeout"),
+            HelloWorldFailure::Other { error } => write!(f, "Hello world error: {}", error),
         }
     }
 }
@@ -118,21 +117,20 @@ impl NetworkBehaviour for HelloWorld {
     }
 }
 
-/// Protocol handler that handles pinging the remote at a regular period
-/// and answering ping queries.
+/// Protocol handler that handles sending hello world messages to the remote at a regular period.
 ///
 /// If the remote doesn't respond, produces an error that closes the connection.
 pub struct HelloWorldHandler {
-    /// The timer used for the delay to the next ping as well as
-    /// the ping timeout.
+    /// The timer used for the delay to the next hello world as well as
+    /// the hello world timeout.
     timer: Delay,
-    /// Outbound ping failures that are pending to be processed by `poll()`.
+    /// Outbound hello world failures that are pending to be processed by `poll()`.
     pending_errors: VecDeque<HelloWorldFailure>,
-    /// The outbound ping state.
+    /// The outbound hello world state.
     outbound: Option<HelloWorldState>,
-    /// The inbound pong handler, i.e. if there is an inbound
+    /// The inbound hello world handler, i.e. if there is an inbound
     /// substream, this is always a future that waits for the
-    /// next inbound ping to be answered.
+    /// next inbound hello world message.
     inbound: Option<HelloWorldFuture>,
 }
 
@@ -191,16 +189,16 @@ impl ProtocolsHandler for HelloWorldHandler {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<ProtocolsHandlerEvent<HelloWorldProtocol, (), HelloWorldResult, Self::Error>> {
-        // Respond to inbound pings.
+        // Respond to inbound hello world messages.
         if let Some(fut) = self.inbound.as_mut() {
             match fut.poll_unpin(cx) {
                 Poll::Pending => {}
                 Poll::Ready(Err(e)) => {
-                    log::debug!("Inbound ping error: {:?}", e);
+                    log::debug!("Inbound hello world error: {:?}", e);
                     self.inbound = None;
                 }
                 Poll::Ready(Ok(stream)) => {
-                    // A ping from a remote peer has been answered, wait for the next.
+                    // hello world from a remote peer received, wait for next.
                     self.inbound = Some(recv_hello_world(stream).boxed());
                     return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
                         HelloWorldSuccess::Received,
@@ -210,20 +208,20 @@ impl ProtocolsHandler for HelloWorldHandler {
         }
 
         loop {
-            // Check for outbound ping failures.
+            // Check for outbound hello world failures.
             if let Some(error) = self.pending_errors.pop_back() {
-                log::debug!("Ping failure: {:?}", error);
+                log::debug!("Hello world failure: {:?}", error);
                 return Poll::Ready(ProtocolsHandlerEvent::Close(error));
             }
 
-            // Continue outbound pings.
+            // Continue outbound hello world messages.
             match self.outbound.take() {
-                Some(HelloWorldState::HelloWorld(mut ping)) => match ping.poll_unpin(cx) {
+                Some(HelloWorldState::HelloWorld(mut hello)) => match hello.poll_unpin(cx) {
                     Poll::Pending => {
                         if self.timer.poll_unpin(cx).is_ready() {
                             self.pending_errors.push_front(HelloWorldFailure::Timeout);
                         } else {
-                            self.outbound = Some(HelloWorldState::HelloWorld(ping));
+                            self.outbound = Some(HelloWorldState::HelloWorld(hello));
                             break;
                         }
                     }
@@ -277,13 +275,13 @@ impl ProtocolsHandler for HelloWorldHandler {
 
 type HelloWorldFuture = BoxFuture<'static, Result<NegotiatedSubstream, io::Error>>;
 
-/// The current state w.r.t. outbound pings.
+/// The current state w.r.t. outbound hello world messages.
 enum HelloWorldState {
-    /// A new substream is being negotiated for the ping protocol.
+    /// A new substream is being negotiated for the hello world protocol.
     OpenStream,
-    /// The substream is idle, waiting to send the next ping.
+    /// The substream is idle, waiting to send the next hello world.
     Idle(NegotiatedSubstream),
-    /// A ping is being sent and the response awaited.
+    /// A hello world is being sent.
     HelloWorld(HelloWorldFuture),
 }
 
