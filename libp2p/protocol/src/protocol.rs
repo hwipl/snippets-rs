@@ -17,7 +17,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{io, iter};
 use void::Void;
-use wasm_timer::{Delay, Instant};
+use wasm_timer::Delay;
 
 /// `HelloWorld` network behaviour.
 pub struct HelloWorld {
@@ -45,7 +45,7 @@ pub enum HelloWorldSuccess {
     /// Sent a ping and received back a pong.
     ///
     /// Includes the round-trip time.
-    Ping { rtt: Duration },
+    Ping,
 }
 
 /// An outbound ping failure.
@@ -135,7 +135,7 @@ pub struct HelloWorldHandler {
     /// The inbound pong handler, i.e. if there is an inbound
     /// substream, this is always a future that waits for the
     /// next inbound ping to be answered.
-    inbound: Option<HelloWorldPongFuture>,
+    inbound: Option<HelloWorldFuture>,
 }
 
 impl HelloWorldHandler {
@@ -227,11 +227,11 @@ impl ProtocolsHandler for HelloWorldHandler {
                             break;
                         }
                     }
-                    Poll::Ready(Ok((stream, rtt))) => {
+                    Poll::Ready(Ok(stream)) => {
                         self.timer.reset(Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::Idle(stream));
                         return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
-                            HelloWorldSuccess::Ping { rtt },
+                            HelloWorldSuccess::Ping,
                         )));
                     }
                     Poll::Ready(Err(e)) => {
@@ -275,8 +275,7 @@ impl ProtocolsHandler for HelloWorldHandler {
     }
 }
 
-type HelloWorldPingFuture = BoxFuture<'static, Result<(NegotiatedSubstream, Duration), io::Error>>;
-type HelloWorldPongFuture = BoxFuture<'static, Result<NegotiatedSubstream, io::Error>>;
+type HelloWorldFuture = BoxFuture<'static, Result<NegotiatedSubstream, io::Error>>;
 
 /// The current state w.r.t. outbound pings.
 enum HelloWorldState {
@@ -285,14 +284,14 @@ enum HelloWorldState {
     /// The substream is idle, waiting to send the next ping.
     Idle(NegotiatedSubstream),
     /// A ping is being sent and the response awaited.
-    HelloWorld(HelloWorldPingFuture),
+    HelloWorld(HelloWorldFuture),
 }
 
 /// `HelloWorld` protocol.
 #[derive(Default, Debug, Copy, Clone)]
 pub struct HelloWorldProtocol;
 
-const PING_SIZE: usize = 32;
+const HELLO_WORLD_MSG: &[u8] = b"hi";
 
 impl UpgradeInfo for HelloWorldProtocol {
     type Info = &'static [u8];
@@ -323,39 +322,22 @@ impl OutboundUpgrade<NegotiatedSubstream> for HelloWorldProtocol {
     }
 }
 
-/// Sends a ping and waits for the pong.
-pub async fn send_hello_world<S>(mut stream: S) -> io::Result<(S, Duration)>
+/// Sends a hello world message.
+pub async fn send_hello_world<S>(mut stream: S) -> io::Result<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    let payload: [u8; PING_SIZE] = [0; PING_SIZE];
-    log::debug!("Preparing ping payload {:?}", payload);
-    stream.write_all(&payload).await?;
+    stream.write_all(HELLO_WORLD_MSG).await?;
     stream.flush().await?;
-    let started = Instant::now();
-    let mut recv_payload = [0u8; PING_SIZE];
-    log::debug!("Awaiting pong for {:?}", payload);
-    stream.read_exact(&mut recv_payload).await?;
-    if recv_payload == payload {
-        Ok((stream, started.elapsed()))
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Ping payload mismatch",
-        ))
-    }
+    Ok(stream)
 }
 
-/// Waits for a ping and sends a pong.
+/// Waits for a hello world message.
 pub async fn recv_hello_world<S>(mut stream: S) -> io::Result<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut payload = [0u8; PING_SIZE];
-    log::debug!("Waiting for ping ...");
+    let mut payload = [0u8; HELLO_WORLD_MSG.len()];
     stream.read_exact(&mut payload).await?;
-    log::debug!("Sending pong for {:?}", payload);
-    stream.write_all(&payload).await?;
-    stream.flush().await?;
     Ok(stream)
 }
