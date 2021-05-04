@@ -40,12 +40,10 @@ pub type HelloWorldResult = Result<HelloWorldSuccess, HelloWorldFailure>;
 /// The successful result of processing an inbound or outbound ping.
 #[derive(Debug)]
 pub enum HelloWorldSuccess {
-    /// Received a ping and sent back a pong.
-    Pong,
-    /// Sent a ping and received back a pong.
-    ///
-    /// Includes the round-trip time.
-    Ping,
+    /// Received a hello world message.
+    Received,
+    /// Sent a hello world message.
+    Sent,
 }
 
 /// An outbound ping failure.
@@ -204,7 +202,9 @@ impl ProtocolsHandler for HelloWorldHandler {
                 Poll::Ready(Ok(stream)) => {
                     // A ping from a remote peer has been answered, wait for the next.
                     self.inbound = Some(recv_hello_world(stream).boxed());
-                    return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(HelloWorldSuccess::Pong)));
+                    return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
+                        HelloWorldSuccess::Received,
+                    )));
                 }
             }
         }
@@ -231,7 +231,7 @@ impl ProtocolsHandler for HelloWorldHandler {
                         self.timer.reset(Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::Idle(stream));
                         return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
-                            HelloWorldSuccess::Ping,
+                            HelloWorldSuccess::Sent,
                         )));
                     }
                     Poll::Ready(Err(e)) => {
