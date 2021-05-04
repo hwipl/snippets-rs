@@ -4,12 +4,10 @@ mod protocol;
 
 use futures::executor::block_on;
 use futures::prelude::*;
-//use libp2p::ping::{Ping, PingConfig};
 use libp2p::swarm::Swarm;
 use libp2p::{identity, PeerId};
 use std::error::Error;
 use std::task::Poll;
-//use std::time::Duration;
 
 use protocol::*;
 
@@ -22,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create transport
     let transport = block_on(libp2p::development_transport(local_key))?;
 
-    // create a ping network behaviour that pings every seconds
+    // create a hello world network behaviour that sends hello world messages
     let behaviour = HelloWorld::new();
 
     // create swarm
