@@ -1,0 +1,10 @@
+[package]
+name = "request"
+version = "0.1.0"
+authors = ["hwipl"]
+edition = "2018"
+
+[dependencies]
+libp2p = "0.37.1"
+futures = "0.3.14"
+async-trait = "0.1.50"
