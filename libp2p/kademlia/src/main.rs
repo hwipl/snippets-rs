@@ -1,13 +1,28 @@
 use futures::executor::block_on;
-use futures::prelude::*;
 use libp2p::kad::record::store::MemoryStore;
 use libp2p::kad::{record::Key, Kademlia, KademliaEvent, Quorum, Record};
-use libp2p::swarm::Swarm;
+use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
-use std::task::Poll;
 
 const KEY: &str = "hello world";
+
+// handle swarm events
+async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
+    loop {
+        match swarm.next_event().await {
+            SwarmEvent::Behaviour(event) => match event {
+                KademliaEvent::QueryResult { .. } => println!("{:?}", event),
+                KademliaEvent::RoutingUpdated { .. } => println!("{:?}", event),
+                KademliaEvent::UnroutablePeer { .. } => println!("{:?}", event),
+                KademliaEvent::RoutablePeer { .. } => println!("{:?}", event),
+                KademliaEvent::PendingRoutablePeer { .. } => println!("{:?}", event),
+            },
+            e @ SwarmEvent::ConnectionEstablished { .. } => println!("{:?}", e),
+            e => println!("{:?}", e),
+        }
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create key and peer id
@@ -60,28 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // start main loop
-    let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => match event {
-                KademliaEvent::QueryResult { .. } => println!("{:?}", event),
-                KademliaEvent::RoutingUpdated { .. } => println!("{:?}", event),
-                KademliaEvent::UnroutablePeer { .. } => println!("{:?}", event),
-                KademliaEvent::RoutablePeer { .. } => println!("{:?}", event),
-                KademliaEvent::PendingRoutablePeer { .. } => println!("{:?}", event),
-            },
-            Poll::Ready(None) => return Poll::Ready(()),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {}", addr);
-                        listening = true;
-                    }
-                }
-                return Poll::Pending;
-            }
-        }
-    }));
+    block_on(handle_events(&mut swarm));
 
     Ok(())
 }
