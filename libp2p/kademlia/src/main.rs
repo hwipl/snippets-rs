@@ -1,6 +1,6 @@
 use futures::executor::block_on;
 use libp2p::kad::record::store::MemoryStore;
-use libp2p::kad::{record::Key, Kademlia, KademliaEvent, Quorum, Record};
+use libp2p::kad::{record::Key, Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
@@ -35,8 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create kademlia behaviour
     let store = MemoryStore::new(local_peer_id.clone());
-    let behaviour = Kademlia::new(local_peer_id.clone(), store);
-    // TODO: with_config()? set custom protocol name?
+    let mut config = KademliaConfig::default();
+    config.set_protocol_name("/hello/world/0.1.0".as_bytes());
+    let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
 
     // create swarm
     let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
