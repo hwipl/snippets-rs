@@ -1,4 +1,5 @@
 use futures::executor::block_on;
+use libp2p::core::ConnectedPoint;
 use libp2p::kad::record::store::MemoryStore;
 use libp2p::kad::{record::Key, Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::swarm::{Swarm, SwarmEvent};
@@ -18,7 +19,28 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
                 KademliaEvent::RoutablePeer { .. } => println!("{:?}", event),
                 KademliaEvent::PendingRoutablePeer { .. } => println!("{:?}", event),
             },
-            e @ SwarmEvent::ConnectionEstablished { .. } => println!("{:?}", e),
+            SwarmEvent::ConnectionEstablished {
+                peer_id, endpoint, ..
+            } => {
+                println!("ConnectionEstablished: {:?} {:?}", peer_id, endpoint);
+                if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
+                    // add peer address to kademlia
+                    println!("Added address {:?} of peer {:?}", send_back_addr, peer_id);
+                    swarm.behaviour_mut().add_address(&peer_id, send_back_addr);
+                }
+            }
+            SwarmEvent::ConnectionClosed {
+                peer_id, endpoint, ..
+            } => {
+                println!("ConnectionClosed: {:?} {:?}", peer_id, endpoint);
+                if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
+                    // remove peer address from kademlia
+                    println!("Removed address {:?} of peer {:?}", send_back_addr, peer_id);
+                    swarm
+                        .behaviour_mut()
+                        .remove_address(&peer_id, &send_back_addr);
+                }
+            }
             e => println!("{:?}", e),
         }
     }
