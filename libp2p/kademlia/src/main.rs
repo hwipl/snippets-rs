@@ -29,24 +29,25 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
     loop {
         match swarm.next_event().await {
             SwarmEvent::Behaviour(event) => match event {
-                KademliaEvent::QueryResult { id, result, .. } => {
-                    println!("Query result: {:?} {:?}", id, result);
+                KademliaEvent::QueryResult { result, .. } => {
+                    // handle query result
                     match result {
                         QueryResult::GetRecord(Ok(GetRecordOk { records, .. })) => {
-                            handle_peer_records(records)
+                            handle_peer_records(records);
+                            return;
                         }
-                        _ => println!("{:?}", result),
+                        _ => (),
                     }
                 }
-                KademliaEvent::RoutingUpdated { .. } => println!("{:?}", event),
-                KademliaEvent::UnroutablePeer { .. } => println!("{:?}", event),
-                KademliaEvent::RoutablePeer { .. } => println!("{:?}", event),
-                KademliaEvent::PendingRoutablePeer { .. } => println!("{:?}", event),
+                KademliaEvent::RoutingUpdated { .. } => (),
+                KademliaEvent::UnroutablePeer { .. } => (),
+                KademliaEvent::RoutablePeer { .. } => (),
+                KademliaEvent::PendingRoutablePeer { .. } => (),
             },
+            SwarmEvent::NewListenAddr(addr) => println!("Listening on {}", addr),
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => {
-                println!("ConnectionEstablished: {:?} {:?}", peer_id, endpoint);
                 if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
                     // add peer address to kademlia
                     println!("Added address {:?} of peer {:?}", send_back_addr, peer_id);
@@ -56,7 +57,6 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
             SwarmEvent::ConnectionClosed {
                 peer_id, endpoint, ..
             } => {
-                println!("ConnectionClosed: {:?} {:?}", peer_id, endpoint);
                 if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
                     // remove peer address from kademlia
                     println!("Removed address {:?} of peer {:?}", send_back_addr, peer_id);
@@ -65,7 +65,7 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
                         .remove_address(&peer_id, &send_back_addr);
                 }
             }
-            e => println!("{:?}", e),
+            _ => println!(),
         }
     }
 }
