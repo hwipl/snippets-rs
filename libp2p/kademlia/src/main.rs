@@ -1,19 +1,43 @@
 use futures::executor::block_on;
 use libp2p::core::ConnectedPoint;
-use libp2p::kad::record::store::MemoryStore;
-use libp2p::kad::{record::Key, Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
+use libp2p::kad::{
+    record::store::MemoryStore, record::Key, GetRecordOk, Kademlia, KademliaConfig, KademliaEvent,
+    PeerRecord, QueryResult, Quorum, Record,
+};
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
+use std::str;
 
 const KEY: &str = "hello world";
+
+// handle records
+fn handle_peer_records(records: Vec<PeerRecord>) {
+    for pr in records {
+        let key = pr.record.key.to_vec();
+        let key = str::from_utf8(&key).unwrap();
+        let value = str::from_utf8(&pr.record.value).unwrap();
+        println!(
+            "Got record:\n  publisher: {:?},\n  key: {:?},\n  value: {:?}",
+            pr.record.publisher, key, value
+        );
+    }
+}
 
 // handle swarm events
 async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
     loop {
         match swarm.next_event().await {
             SwarmEvent::Behaviour(event) => match event {
-                KademliaEvent::QueryResult { .. } => println!("{:?}", event),
+                KademliaEvent::QueryResult { id, result, .. } => {
+                    println!("Query result: {:?} {:?}", id, result);
+                    match result {
+                        QueryResult::GetRecord(Ok(GetRecordOk { records, .. })) => {
+                            handle_peer_records(records)
+                        }
+                        _ => println!("{:?}", result),
+                    }
+                }
                 KademliaEvent::RoutingUpdated { .. } => println!("{:?}", event),
                 KademliaEvent::UnroutablePeer { .. } => println!("{:?}", event),
                 KademliaEvent::RoutablePeer { .. } => println!("{:?}", event),
