@@ -1,0 +1,8 @@
+[package]
+name = "unix-async"
+version = "0.1.0"
+authors = ["hwipl"]
+edition = "2018"
+
+[dependencies]
+async-std = "1.9"
