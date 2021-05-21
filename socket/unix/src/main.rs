@@ -1,30 +1,12 @@
+use std::io;
 use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread;
 
 fn handle_client(stream: UnixStream) {
-    let mut stream = stream;
-    let mut buffer = [0u8; 2048];
-    loop {
-        match stream.read(&mut buffer) {
-            Ok(num) => {
-                if num == 0 {
-                    return;
-                }
-                println!("Read {} bytes from client", num);
-                match stream.write_all(&buffer[..num]) {
-                    Ok(()) => println!("Sent {} bytes to client", num),
-                    Err(e) => {
-                        println!("Error sending to client: {}", e);
-                        return;
-                    }
-                }
-            }
-            Err(e) => {
-                println!("Error reading from client: {}", e);
-                return;
-            }
-        }
+    let (mut reader, mut writer) = (&stream, &stream);
+    if let Err(e) = io::copy(&mut reader, &mut writer) {
+        println!("Error reading from client: {}", e);
     }
 }
 
