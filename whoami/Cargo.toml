@@ -1,0 +1,8 @@
+[package]
+name = "whoami"
+version = "0.1.0"
+authors = ["hwipl"]
+edition = "2018"
+
+[dependencies]
+whoami = "1.1.2"
