@@ -4,6 +4,7 @@ use std::time::Duration;
 use zbus::{dbus_proxy, Connection, Result};
 
 const PATH: &str = "/org/ping/Ping";
+const IFACE: &str = "org.ping.Ping";
 
 #[dbus_proxy(
     default_service = "org.ping.Ping",
@@ -19,7 +20,7 @@ trait Ping {
 async fn send_ping(conn: Connection) -> Result<()> {
     loop {
         task::sleep(Duration::from_secs(1)).await;
-        conn.emit_signal(None::<()>, PATH, "org.ping.Ping", "Ping", &"PING")
+        conn.emit_signal(None::<()>, PATH, IFACE, "Ping", &"PING")
             .await?;
     }
 }
