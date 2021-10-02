@@ -3,6 +3,8 @@ use futures_util::stream::StreamExt;
 use std::time::Duration;
 use zbus::{dbus_proxy, Connection, Result};
 
+const PATH: &str = "/org/ping/Ping";
+
 #[dbus_proxy(
     default_service = "org.ping.Ping",
     interface = "org.ping.Ping",
@@ -17,14 +19,8 @@ trait Ping {
 async fn send_ping(conn: Connection) -> Result<()> {
     loop {
         task::sleep(Duration::from_secs(1)).await;
-        conn.emit_signal(
-            None::<()>,
-            "/org/ping/Ping",
-            "org.ping.Ping",
-            "Ping",
-            &"PING",
-        )
-        .await?;
+        conn.emit_signal(None::<()>, PATH, "org.ping.Ping", "Ping", &"PING")
+            .await?;
     }
 }
 
