@@ -1,6 +1,7 @@
 use zbus::{dbus_interface, Connection, Result};
 
 const PATH: &str = "/org/ping/Ping";
+const IFACE: &str = "org.ping.Ping";
 
 // define ping interface
 struct Ping;
@@ -22,7 +23,7 @@ async fn main() -> Result<()> {
     connection.object_server_mut().await.at(PATH, Ping)?;
 
     // request name
-    connection.request_name("org.ping.Ping").await?;
+    connection.request_name(IFACE).await?;
 
     loop {
         // handle requests in the background
