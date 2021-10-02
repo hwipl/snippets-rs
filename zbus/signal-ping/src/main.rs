@@ -3,6 +3,7 @@ use futures_util::stream::StreamExt;
 use std::time::Duration;
 use zbus::{dbus_proxy, Connection, Result};
 
+const NAME: &str = IFACE;
 const PATH: &str = "/org/ping/Ping";
 const IFACE: &str = "org.ping.Ping";
 
@@ -29,7 +30,7 @@ async fn send_ping(conn: Connection) -> Result<()> {
 async fn main() -> Result<()> {
     // connect to session bus and request well known name
     let conn = Connection::session().await?;
-    conn.request_name("org.ping.Ping").await?;
+    conn.request_name(NAME).await?;
 
     // create proxy and ping signal stream
     let proxy = PingProxy::new(&conn).await?;
