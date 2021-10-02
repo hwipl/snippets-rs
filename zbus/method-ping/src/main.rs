@@ -1,5 +1,7 @@
 use zbus::{dbus_interface, Connection, Result};
 
+const PATH: &str = "/org/ping/Ping";
+
 // define ping interface
 struct Ping;
 
@@ -17,10 +19,7 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
     // setup server
-    connection
-        .object_server_mut()
-        .await
-        .at("/org/ping/Ping", Ping)?;
+    connection.object_server_mut().await.at(PATH, Ping)?;
 
     // request name
     connection.request_name("org.ping.Ping").await?;
