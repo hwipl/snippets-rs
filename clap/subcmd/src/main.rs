@@ -1,15 +1,14 @@
-use clap::{AppSettings, Clap};
+use clap::Parser;
 
 /// Tests clap command line argument parsing with subcommands
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version)]
-#[clap(setting = AppSettings::ColoredHelp)]
 struct Args {
     #[clap(subcommand)]
     subcmd: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     /// Say "Hi" to persons
     Hi(Names),
@@ -17,7 +16,7 @@ enum SubCommand {
     Bye(Names),
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Names {
     /// Names of persons
     #[clap(name = "NAME")]
