@@ -1,7 +1,8 @@
 use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::gossipsub;
-use libp2p::swarm::Swarm;
+use libp2p::gossipsub::GossipsubEvent;
+use libp2p::swarm::{dial_opts::DialOpts, Swarm, SwarmEvent};
 use libp2p::{identity, PeerId};
 use std::error::Error;
 use std::task::Poll;
@@ -35,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // connect to peer in first command line argument if present
     if let Some(addr) = std::env::args().nth(1) {
         let remote = addr.parse()?;
-        swarm.dial_addr(remote)?;
+        swarm.dial(DialOpts::unknown_peer_id().address(remote).build())?;
         println!("Connecting to {}", addr)
     }
 
@@ -44,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     block_on(future::poll_fn(move |cx| loop {
         match swarm.poll_next_unpin(cx) {
             Poll::Ready(Some(event)) => match event {
-                gossipsub::GossipsubEvent::Message { message, .. } => {
+                SwarmEvent::Behaviour(GossipsubEvent::Message { message, .. }) => {
                     println!(
                         "Got message from {:?} to {:?}: {:?}",
                         message.source,
@@ -52,13 +53,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                         String::from_utf8_lossy(&message.data)
                     );
                 }
-                gossipsub::GossipsubEvent::Subscribed { .. } => {
+                SwarmEvent::Behaviour(GossipsubEvent::Subscribed {
+                    peer_id: _peer_id,
+                    topic: _t,
+                }) => {
+                    // println!("Subscribed: {:?} {:?}", peer_id, t);
+                    // swarm.behaviour_mut().add_explicit_peer(&peer_id);
                     swarm
                         .behaviour_mut()
                         .publish(topic.clone(), b"hi".to_vec())
                         .unwrap();
                 }
-                gossipsub::GossipsubEvent::Unsubscribed { .. } => (),
+                SwarmEvent::Behaviour(GossipsubEvent::Unsubscribed { .. }) => {
+                    // println!("Unsubscribed");
+                }
+                _ => (),
             },
             Poll::Ready(None) => return Poll::Ready(()),
             Poll::Pending => {
