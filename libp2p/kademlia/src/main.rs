@@ -1,4 +1,4 @@
-use futures::executor::block_on;
+use futures::{executor::block_on, StreamExt};
 use libp2p::core::ConnectedPoint;
 use libp2p::kad::{
     record::store::MemoryStore, record::Key, GetRecordOk, Kademlia, KademliaConfig, KademliaEvent,
@@ -27,9 +27,10 @@ fn handle_peer_records(records: Vec<PeerRecord>) {
 // handle swarm events
 async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
     loop {
-        match swarm.next_event().await {
+        match swarm.select_next_some().await {
             SwarmEvent::Behaviour(event) => match event {
-                KademliaEvent::QueryResult { result, .. } => {
+                KademliaEvent::InboundRequest { .. } => (),
+                KademliaEvent::OutboundQueryCompleted { result, .. } => {
                     // handle query result
                     match result {
                         QueryResult::GetRecord(Ok(GetRecordOk { records, .. })) => {
@@ -44,7 +45,7 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
                 KademliaEvent::RoutablePeer { .. } => (),
                 KademliaEvent::PendingRoutablePeer { .. } => (),
             },
-            SwarmEvent::NewListenAddr(addr) => println!("Listening on {}", addr),
+            SwarmEvent::NewListenAddr { address: addr, .. } => println!("Listening on {}", addr),
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => {
@@ -95,18 +96,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     // connect to peer in first command line argument if present
     if let Some(addr) = std::env::args().nth(1) {
         let remote: Multiaddr = addr.parse()?;
-        swarm.dial_addr(remote.clone())?;
+        swarm.dial(remote.clone())?;
         println!("Connecting to {}", addr);
 
         // add address to peer id in second command line argument
         let peer_id = std::env::args().nth(2).ok_or("peer id missing")?;
         let peer_id: PeerId = peer_id.parse()?;
-        swarm.behaviour_mut().add_address(&peer_id, remote.clone());
+        swarm.behaviour_mut().add_address(&peer_id, remote);
 
         // request hello world message from the dht
         swarm
             .behaviour_mut()
-            .get_record(&Key::new(&KEY), Quorum::One);
+            .get_record(Key::new(&KEY), Quorum::One);
     } else {
         // store the hello world message in the dht
         let record = Record {
