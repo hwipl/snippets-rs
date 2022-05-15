@@ -4,7 +4,7 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::ping::{Ping, PingConfig};
 use libp2p::swarm::Swarm;
-use libp2p::{identity, PeerId};
+use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
@@ -34,8 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // connect to peer in first command line argument if present
     if let Some(addr) = std::env::args().nth(1) {
-        let remote = addr.parse()?;
-        swarm.dial_addr(remote)?;
+        let remote = addr.parse::<Multiaddr>()?;
+        swarm.dial(remote)?;
         println!("Connecting to {}", addr)
     }
 
