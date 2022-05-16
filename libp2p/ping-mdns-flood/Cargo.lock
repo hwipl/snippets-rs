@@ -2061,11 +2061,11 @@ name = "ping-mdns-flood"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "futures-timer",
  "libp2p",
  "once_cell",
  "serde",
  "serde_cbor",
- "wasm-timer",
 ]
 
 [[package]]

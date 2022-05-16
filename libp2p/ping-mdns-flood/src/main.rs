@@ -2,6 +2,7 @@
 
 use futures::executor::block_on;
 use futures::prelude::*;
+use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
 use libp2p::swarm::NetworkBehaviourEventProcess;
@@ -13,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
-use wasm_timer::Delay;
 
 // key pair and peer id
 static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
@@ -172,7 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         return Poll::Pending;
                     }
                 }
-                Poll::Ready(Ok(())) => {
+                Poll::Ready(()) => {
                     // publish message
                     println!("Sending ping");
                     swarm
@@ -182,9 +182,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     // reset timer
                     timer.reset(Duration::new(5, 0));
-                }
-                Poll::Ready(Err(_)) => {
-                    panic!("timer error");
                 }
             }
         }
