@@ -6,8 +6,8 @@ edition = "2021"
 
 [dependencies]
 libp2p = "0.44.0"
-futures = "0.3.14"
+futures = "0.3.21"
 futures-timer = "3.0.2"
-once_cell = "1.7.2"
-serde = { version = "1.0.125", features = ["derive"] }
-serde_cbor = "0.11.1"
+once_cell = "1.10.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_cbor = "0.11.2"
