@@ -60,6 +60,7 @@ impl PingMessage {
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
+#[behaviour(event_process = true)]
 struct PingBehaviour {
     floodsub: Floodsub,
     mdns: Mdns,
