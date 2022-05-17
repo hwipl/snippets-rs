@@ -5,8 +5,8 @@ use futures::prelude::*;
 use libp2p::core::connection::ConnectionId;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use libp2p::swarm::{
-    KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent,
-    ProtocolsHandlerUpgrErr, SubstreamProtocol,
+    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, KeepAlive,
+    NegotiatedSubstream, SubstreamProtocol,
 };
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::{Multiaddr, PeerId};
@@ -85,20 +85,16 @@ impl HelloWorld {
 }
 
 impl NetworkBehaviour for HelloWorld {
-    type ProtocolsHandler = HelloWorldHandler;
+    type ConnectionHandler = HelloWorldHandler;
     type OutEvent = HelloWorldEvent;
 
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         HelloWorldHandler::new()
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
         Vec::new()
     }
-
-    fn inject_connected(&mut self, _: &PeerId) {}
-
-    fn inject_disconnected(&mut self, _: &PeerId) {}
 
     fn inject_event(&mut self, peer: PeerId, _: ConnectionId, result: HelloWorldResult) {
         self.events.push_front(HelloWorldEvent { peer, result })
@@ -108,7 +104,7 @@ impl NetworkBehaviour for HelloWorld {
         &mut self,
         _: &mut Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Void, HelloWorldEvent>> {
+    ) -> Poll<NetworkBehaviourAction<HelloWorldEvent, HelloWorldHandler>> {
         if let Some(e) = self.events.pop_back() {
             Poll::Ready(NetworkBehaviourAction::GenerateEvent(e))
         } else {
@@ -146,7 +142,7 @@ impl HelloWorldHandler {
     }
 }
 
-impl ProtocolsHandler for HelloWorldHandler {
+impl ConnectionHandler for HelloWorldHandler {
     type InEvent = Void;
     type OutEvent = HelloWorldResult;
     type Error = HelloWorldFailure;
@@ -172,11 +168,11 @@ impl ProtocolsHandler for HelloWorldHandler {
 
     fn inject_event(&mut self, _: Void) {}
 
-    fn inject_dial_upgrade_error(&mut self, _info: (), error: ProtocolsHandlerUpgrErr<Void>) {
+    fn inject_dial_upgrade_error(&mut self, _info: (), error: ConnectionHandlerUpgrErr<Void>) {
         self.outbound = None; // Request a new substream on the next `poll`.
         self.pending_errors.push_front(match error {
             // Note: This timeout only covers protocol negotiation.
-            ProtocolsHandlerUpgrErr::Timeout => HelloWorldFailure::Timeout,
+            ConnectionHandlerUpgrErr::Timeout => HelloWorldFailure::Timeout,
             e => HelloWorldFailure::Other { error: Box::new(e) },
         })
     }
@@ -188,7 +184,7 @@ impl ProtocolsHandler for HelloWorldHandler {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<ProtocolsHandlerEvent<HelloWorldProtocol, (), HelloWorldResult, Self::Error>> {
+    ) -> Poll<ConnectionHandlerEvent<HelloWorldProtocol, (), HelloWorldResult, Self::Error>> {
         // Respond to inbound hello world messages.
         if let Some(fut) = self.inbound.as_mut() {
             match fut.poll_unpin(cx) {
@@ -200,7 +196,7 @@ impl ProtocolsHandler for HelloWorldHandler {
                 Poll::Ready(Ok(stream)) => {
                     // hello world from a remote peer received, wait for next.
                     self.inbound = Some(recv_hello_world(stream).boxed());
-                    return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
+                    return Poll::Ready(ConnectionHandlerEvent::Custom(Ok(
                         HelloWorldSuccess::Received,
                     )));
                 }
@@ -211,7 +207,7 @@ impl ProtocolsHandler for HelloWorldHandler {
             // Check for outbound hello world failures.
             if let Some(error) = self.pending_errors.pop_back() {
                 log::debug!("Hello world failure: {:?}", error);
-                return Poll::Ready(ProtocolsHandlerEvent::Close(error));
+                return Poll::Ready(ConnectionHandlerEvent::Close(error));
             }
 
             // Continue outbound hello world messages.
@@ -228,7 +224,7 @@ impl ProtocolsHandler for HelloWorldHandler {
                     Poll::Ready(Ok(stream)) => {
                         self.timer.reset(Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::Idle(stream));
-                        return Poll::Ready(ProtocolsHandlerEvent::Custom(Ok(
+                        return Poll::Ready(ConnectionHandlerEvent::Custom(Ok(
                             HelloWorldSuccess::Sent,
                         )));
                     }
@@ -249,7 +245,7 @@ impl ProtocolsHandler for HelloWorldHandler {
                         ));
                     }
                     Poll::Ready(Err(e)) => {
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(
+                        return Poll::Ready(ConnectionHandlerEvent::Close(
                             HelloWorldFailure::Other { error: Box::new(e) },
                         ))
                     }
@@ -262,7 +258,7 @@ impl ProtocolsHandler for HelloWorldHandler {
                     self.outbound = Some(HelloWorldState::OpenStream);
                     let protocol = SubstreamProtocol::new(HelloWorldProtocol, ())
                         .with_timeout(Duration::new(5, 0));
-                    return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+                    return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                         protocol,
                     });
                 }
