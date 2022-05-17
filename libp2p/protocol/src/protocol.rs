@@ -2,6 +2,7 @@
 
 use futures::future::BoxFuture;
 use futures::prelude::*;
+use futures_timer::Delay;
 use libp2p::core::connection::ConnectionId;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use libp2p::swarm::{
@@ -17,7 +18,6 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{io, iter};
 use void::Void;
-use wasm_timer::Delay;
 
 /// `HelloWorld` network behaviour.
 pub struct HelloWorld {
@@ -238,16 +238,11 @@ impl ConnectionHandler for HelloWorldHandler {
                         self.outbound = Some(HelloWorldState::Idle(stream));
                         break;
                     }
-                    Poll::Ready(Ok(())) => {
+                    Poll::Ready(()) => {
                         self.timer.reset(Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::HelloWorld(
                             send_hello_world(stream).boxed(),
                         ));
-                    }
-                    Poll::Ready(Err(e)) => {
-                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                            HelloWorldFailure::Other { error: Box::new(e) },
-                        ))
                     }
                 },
                 Some(HelloWorldState::OpenStream) => {
