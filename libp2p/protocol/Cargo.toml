@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 libp2p = "0.44.0"
-futures = "0.3.14"
+futures = "0.3.21"
 void = "1.0"
 futures-timer = "3.0.2"
-log = "0.4.14"
+log = "0.4.17"
