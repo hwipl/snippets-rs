@@ -3,13 +3,13 @@
 use async_trait::async_trait;
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::core::upgrade::{read_one, write_one};
+use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
 use libp2p::request_response::{
     ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
     RequestResponseEvent, RequestResponseMessage,
 };
-use libp2p::swarm::Swarm;
+use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
 use std::task::Poll;
@@ -39,7 +39,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_one(io, 1024)
+        read_length_prefixed(io, 1024)
             .map(|res| match res {
                 Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
                 Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
@@ -56,7 +56,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_one(io, 1024)
+        read_length_prefixed(io, 1024)
             .map(|res| match res {
                 Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
                 Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
@@ -74,7 +74,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_one(io, data).await
+        write_length_prefixed(io, data).await
     }
 
     async fn write_response<T>(
@@ -86,7 +86,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_one(io, data).await
+        write_length_prefixed(io, data).await
     }
 }
 
@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // connect to peer in first command line argument if present
     if let Some(addr) = std::env::args().nth(1) {
         let remote: Multiaddr = addr.parse()?;
-        swarm.dial_addr(remote.clone())?;
+        swarm.dial(remote.clone())?;
         println!("Connecting to {}", addr);
 
         // send to peer id in second command line argument
@@ -145,13 +145,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         match swarm.poll_next_unpin(cx) {
             Poll::Ready(Some(event)) => match event {
                 // handle incoming request message, send back response
-                RequestResponseEvent::Message {
+                SwarmEvent::Behaviour(RequestResponseEvent::Message {
                     peer,
                     message:
                         RequestResponseMessage::Request {
                             request, channel, ..
                         },
-                } => {
+                }) => {
                     println!("received request {:?} from {:?}", request, peer);
                     swarm
                         .behaviour_mut()
@@ -160,23 +160,26 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 // handle incoming response message, stop
-                RequestResponseEvent::Message {
+                SwarmEvent::Behaviour(RequestResponseEvent::Message {
                     peer,
                     message: RequestResponseMessage::Response { response, .. },
-                } => {
+                }) => {
                     println!("received response {:?} from {:?}", response, peer);
                     return Poll::Ready(());
                 }
 
                 // handle response sent event
-                RequestResponseEvent::ResponseSent { peer, .. } => {
+                SwarmEvent::Behaviour(RequestResponseEvent::ResponseSent { peer, .. }) => {
                     println!("sent response {:?} to {:?}", response, peer);
                 }
 
                 // handle errors
-                e => {
+                SwarmEvent::Behaviour(e) => {
                     println!("error: {:?}", e);
                 }
+
+                // ignore other events
+                _ => (),
             },
             Poll::Ready(None) => return Poll::Ready(()),
             Poll::Pending => {
