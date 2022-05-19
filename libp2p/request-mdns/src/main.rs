@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::core::upgrade::{read_one, write_one};
+use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
 use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
 use libp2p::request_response::{
@@ -40,7 +40,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_one(io, 1024)
+        read_length_prefixed(io, 1024)
             .map(|res| match res {
                 Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
                 Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
@@ -57,7 +57,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_one(io, 1024)
+        read_length_prefixed(io, 1024)
             .map(|res| match res {
                 Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
                 Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
@@ -75,7 +75,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_one(io, data).await
+        write_length_prefixed(io, data).await
     }
 
     async fn write_response<T>(
@@ -87,7 +87,7 @@ impl RequestResponseCodec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_one(io, data).await
+        write_length_prefixed(io, data).await
     }
 }
 
@@ -101,6 +101,7 @@ struct HelloResponse(Vec<u8>);
 
 /// Custom network behaviour with request response and mdns
 #[derive(NetworkBehaviour)]
+#[behaviour(event_process = true)]
 struct HelloBehaviour {
     request: RequestResponse<HelloCodec>,
     mdns: Mdns,
