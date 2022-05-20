@@ -5,4 +5,4 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-rocket = "0.5.0-rc"
+rocket = "0.5.0-rc.2"
