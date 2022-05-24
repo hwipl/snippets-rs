@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
 
     // register interface
     let interface = Hello {};
-    conn.object_server_mut().await.at(PATH, interface)?;
+    conn.object_server().at(PATH, interface).await?;
 
     // periodically send hello world signal,
     // handle method calls in the background
