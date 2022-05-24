@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-zbus = "2.0.0-beta.7"
-zvariant = "2.9.0"
-futures-util = "0.3.17"
+zbus = "2.2.0"
+zvariant = "3.2.1"
+futures-util = "0.3.21"
 
 [dependencies.async-std]
-version = "1.10.0"
+version = "1.11.0"
 features = ["attributes"]
