@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
     // setup server
-    connection.object_server_mut().await.at(PATH, Ping)?;
+    connection.object_server().at(PATH, Ping).await?;
 
     // request name
     connection.request_name(IFACE).await?;
