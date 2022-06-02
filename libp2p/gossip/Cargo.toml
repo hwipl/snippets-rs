@@ -5,5 +5,5 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-libp2p = "0.44.0"
+libp2p = "0.45.0"
 futures = "0.3.21"
