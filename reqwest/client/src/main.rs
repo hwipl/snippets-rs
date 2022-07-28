@@ -1,4 +1,5 @@
 use reqwest::Result;
+use std::time::Duration;
 
 #[async_std::main]
 async fn main() -> Result<()> {
@@ -8,8 +9,13 @@ async fn main() -> Result<()> {
         None => "https://www.rust-lang.org".to_string(),
     };
 
+    // create client
+    let client = reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
     // run get request
-    let body = reqwest::get(addr).await?.text().await?;
+    let body = client.get(addr).send().await?.text().await?;
 
     // print returned body
     println!("body = {:?}", body);
