@@ -1,4 +1,5 @@
-use surf::Result;
+use std::time::Duration;
+use surf::{Client, Config, Result};
 
 #[async_std::main]
 async fn main() -> Result<()> {
@@ -8,8 +9,13 @@ async fn main() -> Result<()> {
         None => "https://www.rust-lang.org".to_string(),
     };
 
+    // create client
+    let client: Client = Config::new()
+        .set_timeout(Some(Duration::from_secs(5)))
+        .try_into()?;
+
     // run get request
-    let mut res = surf::get(addr).await?;
+    let mut res = client.get(addr).await?;
 
     // print status
     let status = res.status();
