@@ -24,10 +24,20 @@ async fn main() -> Result<()> {
     };
 
     // run get request
-    let body = request.send().await?.text().await?;
+    let response = request.send().await?;
+
+    // print status and headers
+    println!("{}", response.status());
+    for (header, value) in response.headers() {
+        println!("{}: {:?}", header, value);
+    }
+    println!();
 
     // print returned body
-    println!("body = {:?}", body);
+    let body = response.text().await?;
+    if body != "" {
+        println!("{}", body);
+    }
 
     Ok(())
 }
