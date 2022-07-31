@@ -18,8 +18,8 @@ async fn main() -> Result<()> {
     let request = match std::env::args().nth(1) {
         Some(cmd) => match cmd.as_str() {
             "get" => client.get(addr),
-            _ => panic!("invalid request")
-        }
+            _ => panic!("invalid request"),
+        },
         None => client.get(addr),
     };
 
