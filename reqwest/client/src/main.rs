@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
         None => client.get(addr),
     };
 
-    // run get request
+    // wait for response
     let response = request.send().await?;
 
     // print status and headers
