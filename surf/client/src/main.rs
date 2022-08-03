@@ -17,7 +17,12 @@ async fn main() -> Result<()> {
     // create request
     let request = match std::env::args().nth(1) {
         Some(cmd) => match cmd.as_str() {
+            "delete" => client.delete(addr),
             "get" => client.get(addr),
+            "head" => client.head(addr),
+            "patch" => client.patch(addr),
+            "post" => client.post(addr),
+            "put" => client.put(addr),
             _ => panic!("invalid request"),
         },
         None => client.get(addr),
