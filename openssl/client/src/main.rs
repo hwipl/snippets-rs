@@ -10,9 +10,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => "www.rust-lang.org".to_string(),
     };
 
+    // get port from command line
+    let port = match std::env::args().nth(2) {
+        Some(port) => port,
+        None => "443".to_string(),
+    };
+
     // connect to server
     let connector = SslConnector::builder(SslMethod::tls())?.build();
-    let stream = TcpStream::connect(format!("{}:443", addr))?;
+    let stream = TcpStream::connect(format!("{}:{}", addr, port))?;
     let mut stream = connector.connect(addr.as_str(), stream)?;
 
     // run http request
