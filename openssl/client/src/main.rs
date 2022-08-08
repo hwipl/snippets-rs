@@ -22,7 +22,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut stream = connector.connect(addr.as_str(), stream)?;
 
     // run http request
-    stream.write_all(b"GET / HTTP/1.0\r\n\r\n")?;
+    stream.write_all(
+        format!(
+            "GET / HTTP/1.1\r\n\
+            Host: {}\r\n\
+            Connection: close\r\n\
+            Accept-Encoding: identity\r\n\
+            \r\n",
+            addr
+        )
+        .as_bytes(),
+    )?;
     let mut res = vec![];
     stream.read_to_end(&mut res)?;
     println!("{}", String::from_utf8_lossy(&res));
