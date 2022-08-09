@@ -37,5 +37,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     stream.read_to_end(&mut res)?;
     println!("{}", String::from_utf8_lossy(&res));
 
+    // get peer certificate
+    let certificate = stream.ssl().peer_certificate();
+    println!("{:?}", certificate);
+
     Ok(())
 }
