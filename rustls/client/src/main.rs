@@ -1,13 +1,13 @@
 use std::convert::TryInto;
-use std::sync::Arc;
-
+use std::error::Error;
 use std::io::{stdout, Read, Write};
 use std::net::TcpStream;
+use std::sync::Arc;
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let mut roots = rustls::RootCertStore::empty();
-    for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-        roots.add(&rustls::Certificate(cert.0)).unwrap();
+    for cert in rustls_native_certs::load_native_certs()? {
+        roots.add(&rustls::Certificate(cert.0))?;
     }
 
     let config = rustls::ClientConfig::builder()
@@ -15,9 +15,8 @@ fn main() {
         .with_root_certificates(roots)
         .with_no_client_auth();
 
-    let mut conn =
-        rustls::ClientConnection::new(Arc::new(config), "google.com".try_into().unwrap()).unwrap();
-    let mut sock = TcpStream::connect("google.com:443").expect("cannot connect");
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), "google.com".try_into()?)?;
+    let mut sock = TcpStream::connect("google.com:443")?;
     let mut tls = rustls::Stream::new(&mut conn, &mut sock);
     tls.write_all(
         concat!(
@@ -28,19 +27,19 @@ fn main() {
             "\r\n"
         )
         .as_bytes(),
-    )
-    .expect("write failed");
+    )?;
     let ciphersuite = tls
         .conn
         .negotiated_cipher_suite()
-        .expect("tls handshake failed");
+        .ok_or("tls handshake failed")?;
     writeln!(
         &mut std::io::stderr(),
         "Current ciphersuite: {:?}",
         ciphersuite.suite()
-    )
-    .unwrap();
+    )?;
     let mut plaintext = Vec::new();
-    tls.read_to_end(&mut plaintext).unwrap();
-    stdout().write_all(&plaintext).unwrap();
+    tls.read_to_end(&mut plaintext)?;
+    stdout().write_all(&plaintext)?;
+
+    Ok(())
 }
