@@ -5,6 +5,12 @@ use std::net::TcpStream;
 use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // get address from command line
+    let addr = match std::env::args().nth(1) {
+        Some(addr) => addr,
+        None => "www.rust-lang.org".to_string(),
+    };
+
     // load certificates
     let mut roots = rustls::RootCertStore::empty();
     for cert in rustls_native_certs::load_native_certs()? {
@@ -18,18 +24,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         .with_no_client_auth();
 
     // connect to server
-    let mut conn = rustls::ClientConnection::new(Arc::new(config), "google.com".try_into()?)?;
-    let mut sock = TcpStream::connect("google.com:443")?;
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), addr.as_str().try_into()?)?;
+    let mut sock = TcpStream::connect(format!("{}:443", addr))?;
     let mut tls = rustls::Stream::new(&mut conn, &mut sock);
 
     // send http request
     tls.write_all(
-        concat!(
-            "GET / HTTP/1.1\r\n",
-            "Host: google.com\r\n",
-            "Connection: close\r\n",
-            "Accept-Encoding: identity\r\n",
-            "\r\n"
+        format!(
+            "GET / HTTP/1.1\r\n\
+            Host: {}\r\n\
+            Connection: close\r\n\
+            Accept-Encoding: identity\r\n\
+            \r\n",
+            addr,
         )
         .as_bytes(),
     )?;
