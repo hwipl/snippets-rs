@@ -11,6 +11,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => "www.rust-lang.org".to_string(),
     };
 
+    // get port from command line
+    let port = match std::env::args().nth(2) {
+        Some(port) => port,
+        None => "443".to_string(),
+    };
+
     // load certificates
     let mut roots = rustls::RootCertStore::empty();
     for cert in rustls_native_certs::load_native_certs()? {
@@ -25,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // connect to server
     let mut conn = rustls::ClientConnection::new(Arc::new(config), addr.as_str().try_into()?)?;
-    let mut sock = TcpStream::connect(format!("{}:443", addr))?;
+    let mut sock = TcpStream::connect(format!("{}:{}", addr, port))?;
     let mut tls = rustls::Stream::new(&mut conn, &mut sock);
 
     // send http request
