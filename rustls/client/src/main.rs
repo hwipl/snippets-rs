@@ -63,5 +63,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     tls.read_to_end(&mut plaintext)?;
     stdout().write_all(&plaintext)?;
 
+    // get peer certificate
+    let certificates = tls
+        .conn
+        .peer_certificates()
+        .ok_or("getting peer certificates failed")?;
+    println!("{:?}", certificates[0]);
+
     Ok(())
 }
