@@ -1,8 +1,33 @@
 use std::convert::TryInto;
 use std::error::Error;
 use std::io::{stdout, Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::Arc;
+use std::time::Duration;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn connect(addr: String) -> Result<TcpStream, Box<dyn Error>> {
+    // try to resolve address to socket addresses
+    let sock_addrs = addr.to_socket_addrs()?;
+    if sock_addrs.len() == 0 {
+        return Err("could not resolve address".into());
+    }
+
+    // try connecting to each socket address with a short connect timeout,
+    // set read and write timeout on first successfull connection and return it
+    for sock_addr in sock_addrs {
+        if let Ok(sock) = TcpStream::connect_timeout(&sock_addr, CONNECT_TIMEOUT) {
+            sock.set_read_timeout(Some(READ_TIMEOUT))?;
+            sock.set_write_timeout(Some(WRITE_TIMEOUT))?;
+            return Ok(sock);
+        };
+    }
+
+    Err("failed to connect".into())
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // get address from command line
@@ -31,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // connect to server
     let mut conn = rustls::ClientConnection::new(Arc::new(config), addr.as_str().try_into()?)?;
-    let mut sock = TcpStream::connect(format!("{}:{}", addr, port))?;
+    let mut sock = connect(format!("{}:{}", addr, port))?;
     let mut tls = rustls::Stream::new(&mut conn, &mut sock);
 
     // send http request
