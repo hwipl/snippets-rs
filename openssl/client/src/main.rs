@@ -1,7 +1,32 @@
 use openssl::ssl::{SslConnector, SslMethod};
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn connect(addr: String) -> Result<TcpStream, Box<dyn Error>> {
+    // try to resolve address to socket addresses
+    let sock_addrs = addr.to_socket_addrs()?;
+    if sock_addrs.len() == 0 {
+        return Err("could not resolve address".into());
+    }
+
+    // try connecting to each socket address with a short connect timeout,
+    // set read and write timeout on first successfull connection and return it
+    for sock_addr in sock_addrs {
+        if let Ok(sock) = TcpStream::connect_timeout(&sock_addr, CONNECT_TIMEOUT) {
+            sock.set_read_timeout(Some(READ_TIMEOUT))?;
+            sock.set_write_timeout(Some(WRITE_TIMEOUT))?;
+            return Ok(sock);
+        };
+    }
+
+    Err("failed to connect".into())
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // get address from command line
@@ -18,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // connect to server
     let connector = SslConnector::builder(SslMethod::tls())?.build();
-    let stream = TcpStream::connect(format!("{}:{}", addr, port))?;
+    let stream = connect(format!("{}:{}", addr, port))?;
     let mut stream = connector.connect(addr.as_str(), stream)?;
 
     // run http request
