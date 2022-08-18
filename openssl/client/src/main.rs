@@ -1,6 +1,8 @@
+use openssl::hash::MessageDigest;
 use openssl::ssl::{SslConnector, SslMethod};
 use std::error::Error;
-use std::io::{Read, Write};
+use std::fmt::Write as FmtWrite;
+use std::io::{Read, Write as IoWrite};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -63,8 +65,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{}", String::from_utf8_lossy(&res));
 
     // get peer certificate
-    let certificate = stream.ssl().peer_certificate();
+    let certificate = stream
+        .ssl()
+        .peer_certificate()
+        .ok_or("could not get certificate")?;
     println!("{:?}", certificate);
+
+    // get digest
+    let digest = certificate.digest(MessageDigest::sha256())?;
+    let mut digest_hex = String::new();
+    for byte in digest.iter() {
+        write!(&mut digest_hex, "{:X}", byte)?;
+    }
+    println!("Digest: {}", digest_hex);
 
     Ok(())
 }
