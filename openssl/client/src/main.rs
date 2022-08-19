@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let digest = certificate.digest(MessageDigest::sha256())?;
     let mut digest_hex = String::new();
     for byte in digest.iter() {
-        write!(&mut digest_hex, "{:X}", byte)?;
+        write!(&mut digest_hex, "{:02x}", byte)?;
     }
     println!("Digest: {}", digest_hex);
 
