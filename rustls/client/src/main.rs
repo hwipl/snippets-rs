@@ -95,5 +95,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("getting peer certificates failed")?;
     println!("{:?}", certificates[0]);
 
+    // get digest
+    let digest = ring::digest::digest(&ring::digest::SHA256, certificates[0].as_ref());
+    println!("{:?}", digest);
+
     Ok(())
 }
