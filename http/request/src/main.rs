@@ -2,31 +2,45 @@ use http::{Request, Version};
 use std::error::Error;
 use std::fmt::Write;
 
-/// get the head of the request as a string, this includes:
+/// head of a request as a string that includes:
 /// - the start-line
 /// - the headers
 /// - the empty line separating the head from the body
-fn get_head_string<T>(request: &Request<T>) -> Result<String, Box<dyn Error>> {
-    let mut s = String::new();
+struct RequestHead(String);
 
-    // write start-line
-    write!(
-        &mut s,
-        "{} {} {:?}\r\n",
-        request.method(),
-        request.uri(),
-        request.version()
-    )?;
+/// try to get the request head from a request
+impl<T> TryFrom<&Request<T>> for RequestHead {
+    type Error = Box<dyn Error>;
 
-    // write headers
-    for (name, value) in request.headers() {
-        write!(&mut s, "{}: {}\r\n", name, value.to_str()?)?;
+    fn try_from(request: &Request<T>) -> Result<Self, Self::Error> {
+        let mut s = String::new();
+
+        // write start-line
+        write!(
+            &mut s,
+            "{} {} {:?}\r\n",
+            request.method(),
+            request.uri(),
+            request.version()
+        )?;
+
+        // write headers
+        for (name, value) in request.headers() {
+            write!(&mut s, "{}: {}\r\n", name, value.to_str()?)?;
+        }
+
+        // write empty line
+        write!(&mut s, "\r\n")?;
+
+        Ok(RequestHead(s))
     }
+}
 
-    // write empty line
-    write!(&mut s, "\r\n")?;
-
-    Ok(s)
+/// convert the request head to string
+impl From<RequestHead> for String {
+    fn from(head: RequestHead) -> String {
+        head.0
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -38,7 +52,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .header("Connection", "close")
         .header("Accept-Encoding", "identity")
         .body(())?;
-    let head = get_head_string(&request)?;
+
+    let head = String::from(RequestHead::try_from(&request)?);
     println!("head as string:\n{}", head);
     println!("head as bytes:\n{:?}", head.as_bytes());
 
