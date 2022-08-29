@@ -5,8 +5,7 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
-use libp2p::swarm::NetworkBehaviourEventProcess;
-use libp2p::swarm::Swarm;
+use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::NetworkBehaviour;
 use libp2p::{identity, PeerId};
 use once_cell::sync::Lazy;
@@ -60,66 +59,27 @@ impl PingMessage {
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
-#[behaviour(event_process = true)]
+#[behaviour(out_event = "PingBehaviourEvent")]
 struct PingBehaviour {
     floodsub: Floodsub,
     mdns: Mdns,
 }
 
-impl NetworkBehaviourEventProcess<FloodsubEvent> for PingBehaviour {
-    // Called when `floodsub` produces an event.
-    fn inject_event(&mut self, message: FloodsubEvent) {
-        if let FloodsubEvent::Message(message) = message {
-            // parse ping message
-            let msg = match PingMessage::parse(&message.data) {
-                Ok(ping) => ping,
-                Err(_) => return,
-            };
+#[derive(Debug)]
+enum PingBehaviourEvent {
+    Floodsub(FloodsubEvent),
+    Mdns(MdnsEvent),
+}
 
-            // handle ping message types "ping" and "pong"
-            match msg.request {
-                PING => {
-                    // received ping, send pong
-                    self.floodsub
-                        .publish(TOPIC.clone(), PingMessage::pong(message.source));
-                }
-                PONG => {
-                    // received pong, check if it is for us
-                    let peer = match PeerId::from_bytes(&msg.peer) {
-                        Ok(peer) => peer,
-                        Err(_) => return,
-                    };
-                    if peer != PEER_ID.clone() {
-                        return;
-                    }
-                    println!("Received ping reply from {:?}", message.source);
-                }
-                _ => {
-                    // handle unknown messages
-                    println!("Received unknown message from {:?}", message.source);
-                }
-            }
-        }
+impl From<FloodsubEvent> for PingBehaviourEvent {
+    fn from(event: FloodsubEvent) -> Self {
+        PingBehaviourEvent::Floodsub(event)
     }
 }
 
-impl NetworkBehaviourEventProcess<MdnsEvent> for PingBehaviour {
-    // Called when `mdns` produces an event.
-    fn inject_event(&mut self, event: MdnsEvent) {
-        match event {
-            MdnsEvent::Discovered(list) => {
-                for (peer, _) in list {
-                    self.floodsub.add_node_to_partial_view(peer);
-                }
-            }
-            MdnsEvent::Expired(list) => {
-                for (peer, _) in list {
-                    if !self.mdns.has_node(&peer) {
-                        self.floodsub.remove_node_from_partial_view(&peer);
-                    }
-                }
-            }
-        }
+impl From<MdnsEvent> for PingBehaviourEvent {
+    fn from(event: MdnsEvent) -> Self {
+        PingBehaviourEvent::Mdns(event)
     }
 }
 
@@ -156,7 +116,73 @@ fn main() -> Result<(), Box<dyn Error>> {
             // handle swarm events
             let mut swarm_pending = false;
             match swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(event)) => println!("{:?}", event),
+                Poll::Ready(Some(event)) => {
+                    match event {
+                        // Floodsub event
+                        SwarmEvent::Behaviour(PingBehaviourEvent::Floodsub(event)) => {
+                            if let FloodsubEvent::Message(message) = event {
+                                // parse ping message
+                                let msg = match PingMessage::parse(&message.data) {
+                                    Ok(ping) => ping,
+                                    Err(_) => continue,
+                                };
+
+                                // handle ping message types "ping" and "pong"
+                                match msg.request {
+                                    PING => {
+                                        // received ping, send pong
+                                        swarm.behaviour_mut().floodsub.publish(
+                                            TOPIC.clone(),
+                                            PingMessage::pong(message.source),
+                                        );
+                                    }
+                                    PONG => {
+                                        // received pong, check if it is for us
+                                        let peer = match PeerId::from_bytes(&msg.peer) {
+                                            Ok(peer) => peer,
+                                            Err(_) => continue,
+                                        };
+                                        if peer != PEER_ID.clone() {
+                                            continue;
+                                        }
+                                        println!("Received ping reply from {:?}", message.source);
+                                    }
+                                    _ => {
+                                        // handle unknown messages
+                                        println!(
+                                            "Received unknown message from {:?}",
+                                            message.source
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        // Mdns event
+                        SwarmEvent::Behaviour(PingBehaviourEvent::Mdns(event)) => match event {
+                            MdnsEvent::Discovered(list) => {
+                                for (peer, _) in list {
+                                    swarm
+                                        .behaviour_mut()
+                                        .floodsub
+                                        .add_node_to_partial_view(peer);
+                                }
+                            }
+                            MdnsEvent::Expired(list) => {
+                                for (peer, _) in list {
+                                    if !swarm.behaviour().mdns.has_node(&peer) {
+                                        swarm
+                                            .behaviour_mut()
+                                            .floodsub
+                                            .remove_node_from_partial_view(&peer);
+                                    }
+                                }
+                            }
+                        },
+
+                        event => println!("{:?}", event),
+                    }
+                }
                 Poll::Ready(None) => {
                     return Poll::Ready(Ok(()));
                 }
