@@ -10,7 +10,7 @@ use libp2p::request_response::{
     ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
     RequestResponseEvent, RequestResponseMessage,
 };
-use libp2p::swarm::{NetworkBehaviourEventProcess, Swarm};
+use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, NetworkBehaviour, PeerId};
 use std::error::Error;
 use std::task::Poll;
@@ -101,78 +101,27 @@ struct HelloResponse(Vec<u8>);
 
 /// Custom network behaviour with request response and mdns
 #[derive(NetworkBehaviour)]
-#[behaviour(event_process = true)]
+#[behaviour(out_event = "HelloBehaviourEvent")]
 struct HelloBehaviour {
     request: RequestResponse<HelloCodec>,
     mdns: Mdns,
 }
 
-impl NetworkBehaviourEventProcess<RequestResponseEvent<HelloRequest, HelloResponse>>
-    for HelloBehaviour
-{
-    // Called when `request` produces an event.
-    fn inject_event(&mut self, message: RequestResponseEvent<HelloRequest, HelloResponse>) {
-        // create messages
-        let request = HelloRequest("hey".to_string().into_bytes());
-        let response = HelloResponse("hi".to_string().into_bytes());
+#[derive(Debug)]
+enum HelloBehaviourEvent {
+    RequestResponse(RequestResponseEvent<HelloRequest, HelloResponse>),
+    Mdns(MdnsEvent),
+}
 
-        // handle incoming messages
-        if let RequestResponseEvent::Message { peer, message } = message {
-            match message {
-                // handle incoming request message, send back response
-                RequestResponseMessage::Request { channel, .. } => {
-                    println!("received request {:?} from {:?}", request, peer);
-                    self.request
-                        .send_response(channel, response.clone())
-                        .unwrap();
-                    return;
-                }
-
-                // handle incoming response message
-                RequestResponseMessage::Response { response, .. } => {
-                    println!("received response {:?} from {:?}", response, peer);
-                    return;
-                }
-            }
-        }
-
-        // handle response sent event
-        if let RequestResponseEvent::ResponseSent { peer, .. } = message {
-            println!("sent response {:?} to {:?}", response, peer);
-            return;
-        }
-
-        println!("request response error: {:?}", message);
+impl From<RequestResponseEvent<HelloRequest, HelloResponse>> for HelloBehaviourEvent {
+    fn from(event: RequestResponseEvent<HelloRequest, HelloResponse>) -> Self {
+        HelloBehaviourEvent::RequestResponse(event)
     }
 }
 
-impl NetworkBehaviourEventProcess<MdnsEvent> for HelloBehaviour {
-    // Called when `mdns` produces an event.
-    fn inject_event(&mut self, event: MdnsEvent) {
-        let request = HelloRequest("hey".to_string().into_bytes());
-        match event {
-            MdnsEvent::Discovered(list) => {
-                let mut new_peers: Vec<PeerId> = Vec::new();
-                for (peer, addr) in list {
-                    self.request.add_address(&peer, addr.clone());
-                    if new_peers.contains(&peer) {
-                        continue;
-                    }
-                    new_peers.push(peer);
-                }
-
-                for peer in new_peers {
-                    self.request.send_request(&peer, request.clone());
-                }
-            }
-            MdnsEvent::Expired(list) => {
-                for (peer, addr) in list {
-                    if !self.mdns.has_node(&peer) {
-                        self.request.remove_address(&peer, &addr);
-                    }
-                }
-            }
-        }
+impl From<MdnsEvent> for HelloBehaviourEvent {
+    fn from(event: MdnsEvent) -> Self {
+        HelloBehaviourEvent::Mdns(event)
     }
 }
 
@@ -207,7 +156,81 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut listening = false;
     block_on(future::poll_fn(move |cx| loop {
         match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => println!("event: {:?}", event),
+            Poll::Ready(Some(event)) => match event {
+                // RequestResponse event
+                SwarmEvent::Behaviour(HelloBehaviourEvent::RequestResponse(event)) => {
+                    // create messages
+                    let request = HelloRequest("hey".to_string().into_bytes());
+                    let response = HelloResponse("hi".to_string().into_bytes());
+
+                    // handle incoming messages
+                    if let RequestResponseEvent::Message { peer, message } = event {
+                        match message {
+                            // handle incoming request message, send back response
+                            RequestResponseMessage::Request { channel, .. } => {
+                                println!("received request {:?} from {:?}", request, peer);
+                                swarm
+                                    .behaviour_mut()
+                                    .request
+                                    .send_response(channel, response.clone())
+                                    .unwrap();
+                                continue;
+                            }
+
+                            // handle incoming response message
+                            RequestResponseMessage::Response { response, .. } => {
+                                println!("received response {:?} from {:?}", response, peer);
+                                continue;
+                            }
+                        }
+                    }
+
+                    // handle response sent event
+                    if let RequestResponseEvent::ResponseSent { peer, .. } = event {
+                        println!("sent response {:?} to {:?}", response, peer);
+                        continue;
+                    }
+
+                    println!("request response error: {:?}", event);
+                }
+
+                // Mdns event
+                SwarmEvent::Behaviour(HelloBehaviourEvent::Mdns(event)) => {
+                    let request = HelloRequest("hey".to_string().into_bytes());
+                    match event {
+                        MdnsEvent::Discovered(list) => {
+                            let mut new_peers: Vec<PeerId> = Vec::new();
+                            for (peer, addr) in list {
+                                swarm
+                                    .behaviour_mut()
+                                    .request
+                                    .add_address(&peer, addr.clone());
+                                if new_peers.contains(&peer) {
+                                    continue;
+                                }
+                                new_peers.push(peer);
+                            }
+
+                            for peer in new_peers {
+                                swarm
+                                    .behaviour_mut()
+                                    .request
+                                    .send_request(&peer, request.clone());
+                            }
+                        }
+                        MdnsEvent::Expired(list) => {
+                            for (peer, addr) in list {
+                                if !swarm.behaviour().mdns.has_node(&peer) {
+                                    swarm.behaviour_mut().request.remove_address(&peer, &addr);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // other event
+                event => println!("event: {:?}", event),
+            },
             Poll::Ready(None) => return Poll::Ready(()),
             Poll::Pending => {
                 if !listening {
