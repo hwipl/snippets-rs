@@ -125,6 +125,80 @@ impl From<MdnsEvent> for HelloBehaviourEvent {
     }
 }
 
+/// handle RequestResponse event
+fn handle_request_response_event(
+    swarm: &mut Swarm<HelloBehaviour>,
+    event: RequestResponseEvent<HelloRequest, HelloResponse>,
+) {
+    // create messages
+    let request = HelloRequest("hey".to_string().into_bytes());
+    let response = HelloResponse("hi".to_string().into_bytes());
+
+    // handle incoming messages
+    if let RequestResponseEvent::Message { peer, message } = event {
+        match message {
+            // handle incoming request message, send back response
+            RequestResponseMessage::Request { channel, .. } => {
+                println!("received request {:?} from {:?}", request, peer);
+                swarm
+                    .behaviour_mut()
+                    .request
+                    .send_response(channel, response.clone())
+                    .unwrap();
+                return;
+            }
+
+            // handle incoming response message
+            RequestResponseMessage::Response { response, .. } => {
+                println!("received response {:?} from {:?}", response, peer);
+                return;
+            }
+        }
+    }
+
+    // handle response sent event
+    if let RequestResponseEvent::ResponseSent { peer, .. } = event {
+        println!("sent response {:?} to {:?}", response, peer);
+        return;
+    }
+
+    println!("request response error: {:?}", event);
+}
+
+/// handle Mdns event
+fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: MdnsEvent) {
+    let request = HelloRequest("hey".to_string().into_bytes());
+    match event {
+        MdnsEvent::Discovered(list) => {
+            let mut new_peers: Vec<PeerId> = Vec::new();
+            for (peer, addr) in list {
+                swarm
+                    .behaviour_mut()
+                    .request
+                    .add_address(&peer, addr.clone());
+                if new_peers.contains(&peer) {
+                    continue;
+                }
+                new_peers.push(peer);
+            }
+
+            for peer in new_peers {
+                swarm
+                    .behaviour_mut()
+                    .request
+                    .send_request(&peer, request.clone());
+            }
+        }
+        MdnsEvent::Expired(list) => {
+            for (peer, addr) in list {
+                if !swarm.behaviour().mdns.has_node(&peer) {
+                    swarm.behaviour_mut().request.remove_address(&peer, &addr);
+                }
+            }
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // create key and peer id
     let local_key = identity::Keypair::generate_ed25519();
@@ -159,73 +233,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             Poll::Ready(Some(event)) => match event {
                 // RequestResponse event
                 SwarmEvent::Behaviour(HelloBehaviourEvent::RequestResponse(event)) => {
-                    // create messages
-                    let request = HelloRequest("hey".to_string().into_bytes());
-                    let response = HelloResponse("hi".to_string().into_bytes());
-
-                    // handle incoming messages
-                    if let RequestResponseEvent::Message { peer, message } = event {
-                        match message {
-                            // handle incoming request message, send back response
-                            RequestResponseMessage::Request { channel, .. } => {
-                                println!("received request {:?} from {:?}", request, peer);
-                                swarm
-                                    .behaviour_mut()
-                                    .request
-                                    .send_response(channel, response.clone())
-                                    .unwrap();
-                                continue;
-                            }
-
-                            // handle incoming response message
-                            RequestResponseMessage::Response { response, .. } => {
-                                println!("received response {:?} from {:?}", response, peer);
-                                continue;
-                            }
-                        }
-                    }
-
-                    // handle response sent event
-                    if let RequestResponseEvent::ResponseSent { peer, .. } = event {
-                        println!("sent response {:?} to {:?}", response, peer);
-                        continue;
-                    }
-
-                    println!("request response error: {:?}", event);
+                    handle_request_response_event(&mut swarm, event);
                 }
 
                 // Mdns event
                 SwarmEvent::Behaviour(HelloBehaviourEvent::Mdns(event)) => {
-                    let request = HelloRequest("hey".to_string().into_bytes());
-                    match event {
-                        MdnsEvent::Discovered(list) => {
-                            let mut new_peers: Vec<PeerId> = Vec::new();
-                            for (peer, addr) in list {
-                                swarm
-                                    .behaviour_mut()
-                                    .request
-                                    .add_address(&peer, addr.clone());
-                                if new_peers.contains(&peer) {
-                                    continue;
-                                }
-                                new_peers.push(peer);
-                            }
-
-                            for peer in new_peers {
-                                swarm
-                                    .behaviour_mut()
-                                    .request
-                                    .send_request(&peer, request.clone());
-                            }
-                        }
-                        MdnsEvent::Expired(list) => {
-                            for (peer, addr) in list {
-                                if !swarm.behaviour().mdns.has_node(&peer) {
-                                    swarm.behaviour_mut().request.remove_address(&peer, &addr);
-                                }
-                            }
-                        }
-                    }
+                    handle_mdns_event(&mut swarm, event);
                 }
 
                 // other event
