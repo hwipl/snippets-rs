@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create kademlia behaviour
     let store = MemoryStore::new(local_peer_id.clone());
     let mut config = KademliaConfig::default();
-    config.set_protocol_name("/hello/world/0.1.0".as_bytes());
+    config.set_protocol_names(vec!["/hello/world/0.1.0".as_bytes().into()]);
     let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
 
     // create swarm
