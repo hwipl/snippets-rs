@@ -2,12 +2,27 @@
 
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::ping::{Ping, PingConfig};
-use libp2p::swarm::Swarm;
-use libp2p::{identity, Multiaddr, PeerId};
+use libp2p::swarm::{keep_alive, Swarm};
+use libp2p::{identity, ping, Multiaddr, NetworkBehaviour, PeerId};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
+
+/// Ping network behaviour
+#[derive(NetworkBehaviour)]
+struct PingBehaviour {
+    keep_alive: keep_alive::Behaviour,
+    ping: ping::Behaviour,
+}
+
+impl PingBehaviour {
+    fn new() -> Self {
+        PingBehaviour {
+            keep_alive: keep_alive::Behaviour::default(),
+            ping: ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(1))),
+        }
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create key and peer id
@@ -19,11 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let transport = block_on(libp2p::development_transport(local_key))?;
 
     // create a ping network behaviour that pings every seconds
-    let behaviour = Ping::new(
-        PingConfig::new()
-            .with_keep_alive(true)
-            .with_interval(Duration::from_secs(1)),
-    );
+    let behaviour = PingBehaviour::new();
 
     // create swarm
     let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
