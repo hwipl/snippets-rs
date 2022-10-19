@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let transport = block_on(libp2p::development_transport(local_key))?;
 
     // create mdns
-    let mdns = block_on(Mdns::new(MdnsConfig::default()))?;
+    let mdns = Mdns::new(MdnsConfig::default())?;
 
     // create request response
     let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
