@@ -1,3 +1,4 @@
+use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::convert::Infallible;
@@ -85,8 +86,11 @@ async fn handle_get_file(req: Request<Body>) -> Result<Response<Body>, Infallibl
     }
 }
 
-async fn handle_get(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-    println!("{} {}", req.method(), req.uri().path());
+async fn handle_get(
+    remote_addr: SocketAddr,
+    req: Request<Body>,
+) -> Result<Response<Body>, Infallible> {
+    println!("{} {} {}", remote_addr, req.method(), req.uri().path());
 
     if is_local_dir(&req).await {
         handle_get_dir(req).await
@@ -95,9 +99,9 @@ async fn handle_get(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     }
 }
 
-async fn handle(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle(remote_addr: SocketAddr, req: Request<Body>) -> Result<Response<Body>, Infallible> {
     match req.method() {
-        &Method::GET => handle_get(req).await,
+        &Method::GET => handle_get(remote_addr, req).await,
         _ => bad_request(),
     }
 }
@@ -105,7 +109,15 @@ async fn handle(req: Request<Body>) -> Result<Response<Body>, Infallible> {
 #[tokio::main]
 async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let make_service = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle)) });
+
+    // create request handler that uses remote address
+    let make_service = make_service_fn(|conn: &AddrStream| {
+        let remote_addr = conn.remote_addr();
+        let service = service_fn(move |req| handle(remote_addr, req));
+
+        async move { Ok::<_, Infallible>(service) }
+    });
+
     let server = Server::bind(&addr).serve(make_service);
 
     if let Err(e) = server.await {
