@@ -54,12 +54,19 @@ async fn get_local_dir_html(req: &Request<Body>) -> String {
                 if filetype.is_symlink() {
                     continue;
                 }
+                let is_dir = match filetype.is_dir() {
+                    true => "/",
+                    false => "",
+                };
                 if let Some(name) = entry.file_name().to_str() {
-                    let href = match req_path {
-                        "/" => format!("<li><a href=/{0}>{0}</a></li>", name),
-                        _ => format!("<li><a href={0}/{1}>{1}</a></li>", req_path, name),
+                    let li = match req_path {
+                        "/" => format!("<li><a href=/{0}>{0}{1}</a></li>", name, is_dir),
+                        _ => format!(
+                            "<li><a href={0}/{1}>{1}{2}</a></li>",
+                            req_path, name, is_dir
+                        ),
                     };
-                    html += &href;
+                    html += &li;
                 }
             }
         }
