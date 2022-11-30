@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     behaviour.subscribe(&topic).unwrap();
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
