@@ -1,8 +1,8 @@
 use futures::{executor::block_on, StreamExt};
 use libp2p::core::ConnectedPoint;
 use libp2p::kad::{
-    record::store::MemoryStore, record::Key, GetRecordOk, Kademlia, KademliaConfig, KademliaEvent,
-    PeerRecord, QueryResult, Quorum, Record,
+    record::store::MemoryStore, record::Key, GetRecordOk::FoundRecord, Kademlia, KademliaConfig,
+    KademliaEvent, PeerRecord, QueryResult, Quorum, Record,
 };
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
@@ -12,16 +12,14 @@ use std::str;
 const KEY: &str = "hello world";
 
 // handle records
-fn handle_peer_records(records: Vec<PeerRecord>) {
-    for pr in records {
-        let key = pr.record.key.to_vec();
-        let key = str::from_utf8(&key).unwrap();
-        let value = str::from_utf8(&pr.record.value).unwrap();
-        println!(
-            "Got record:\n  publisher: {:?},\n  key: {:?},\n  value: {:?}",
-            pr.record.publisher, key, value
-        );
-    }
+fn handle_peer_records(peer_record: PeerRecord) {
+    let key = peer_record.record.key.to_vec();
+    let key = str::from_utf8(&key).unwrap();
+    let value = str::from_utf8(&peer_record.record.value).unwrap();
+    println!(
+        "Got record:\n  publisher: {:?},\n  key: {:?},\n  value: {:?}",
+        peer_record.record.publisher, key, value
+    );
 }
 
 // handle swarm events
@@ -30,11 +28,11 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
         match swarm.select_next_some().await {
             SwarmEvent::Behaviour(event) => match event {
                 KademliaEvent::InboundRequest { .. } => (),
-                KademliaEvent::OutboundQueryCompleted { result, .. } => {
+                KademliaEvent::OutboundQueryProgressed { result, .. } => {
                     // handle query result
                     match result {
-                        QueryResult::GetRecord(Ok(GetRecordOk { records, .. })) => {
-                            handle_peer_records(records);
+                        QueryResult::GetRecord(Ok(FoundRecord(record))) => {
+                            handle_peer_records(record);
                             return;
                         }
                         _ => (),
@@ -87,7 +85,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
@@ -105,9 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         swarm.behaviour_mut().add_address(&peer_id, remote);
 
         // request hello world message from the dht
-        swarm
-            .behaviour_mut()
-            .get_record(Key::new(&KEY), Quorum::One);
+        swarm.behaviour_mut().get_record(Key::new(&KEY));
     } else {
         // store the hello world message in the dht
         let record = Record {
