@@ -2,8 +2,8 @@
 
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::swarm::{keep_alive, Swarm};
-use libp2p::{identity, ping, Multiaddr, NetworkBehaviour, PeerId};
+use libp2p::swarm::{keep_alive, NetworkBehaviour, Swarm};
+use libp2p::{identity, ping, Multiaddr, PeerId};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = PingBehaviour::new();
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
