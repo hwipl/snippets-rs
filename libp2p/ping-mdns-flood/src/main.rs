@@ -4,9 +4,8 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
-use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
-use libp2p::swarm::{Swarm, SwarmEvent};
-use libp2p::NetworkBehaviour;
+use libp2p::mdns;
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{identity, PeerId};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -62,13 +61,13 @@ impl PingMessage {
 #[behaviour(out_event = "PingBehaviourEvent")]
 struct PingBehaviour {
     floodsub: Floodsub,
-    mdns: Mdns,
+    mdns: mdns::async_io::Behaviour,
 }
 
 #[derive(Debug)]
 enum PingBehaviourEvent {
     Floodsub(FloodsubEvent),
-    Mdns(MdnsEvent),
+    Mdns(mdns::Event),
 }
 
 impl From<FloodsubEvent> for PingBehaviourEvent {
@@ -77,8 +76,8 @@ impl From<FloodsubEvent> for PingBehaviourEvent {
     }
 }
 
-impl From<MdnsEvent> for PingBehaviourEvent {
-    fn from(event: MdnsEvent) -> Self {
+impl From<mdns::Event> for PingBehaviourEvent {
+    fn from(event: mdns::Event) -> Self {
         PingBehaviourEvent::Mdns(event)
     }
 }
@@ -121,9 +120,9 @@ fn handle_floodsub_event(swarm: &mut Swarm<PingBehaviour>, event: FloodsubEvent)
 }
 
 /// handle mdns event
-fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: MdnsEvent) {
+fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: mdns::Event) {
     match event {
-        MdnsEvent::Discovered(list) => {
+        mdns::Event::Discovered(list) => {
             for (peer, _) in list {
                 swarm
                     .behaviour_mut()
@@ -131,7 +130,7 @@ fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: MdnsEvent) {
                     .add_node_to_partial_view(peer);
             }
         }
-        MdnsEvent::Expired(list) => {
+        mdns::Event::Expired(list) => {
             for (peer, _) in list {
                 if !swarm.behaviour().mdns.has_node(&peer) {
                     swarm
@@ -158,13 +157,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     floodsub.subscribe(TOPIC.clone());
 
     // create mdns
-    let mdns = Mdns::new(MdnsConfig::default())?;
+    let mdns = mdns::Behaviour::new(mdns::Config::default())?;
 
     // create behaviour
     let behaviour = PingBehaviour { floodsub, mdns };
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, PEER_ID.clone());
+    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, PEER_ID.clone());
 
     // listen on all ipv4 and ipv6 addresses and random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
