@@ -5,13 +5,13 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
-use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
+use libp2p::mdns;
 use libp2p::request_response::{
     ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
     RequestResponseEvent, RequestResponseMessage,
 };
-use libp2p::swarm::{Swarm, SwarmEvent};
-use libp2p::{identity, NetworkBehaviour, PeerId};
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
+use libp2p::{identity, PeerId};
 use std::error::Error;
 use std::task::Poll;
 use std::{io, iter};
@@ -104,13 +104,13 @@ struct HelloResponse(Vec<u8>);
 #[behaviour(out_event = "HelloBehaviourEvent")]
 struct HelloBehaviour {
     request: RequestResponse<HelloCodec>,
-    mdns: Mdns,
+    mdns: mdns::async_io::Behaviour,
 }
 
 #[derive(Debug)]
 enum HelloBehaviourEvent {
     RequestResponse(RequestResponseEvent<HelloRequest, HelloResponse>),
-    Mdns(MdnsEvent),
+    Mdns(mdns::Event),
 }
 
 impl From<RequestResponseEvent<HelloRequest, HelloResponse>> for HelloBehaviourEvent {
@@ -119,8 +119,8 @@ impl From<RequestResponseEvent<HelloRequest, HelloResponse>> for HelloBehaviourE
     }
 }
 
-impl From<MdnsEvent> for HelloBehaviourEvent {
-    fn from(event: MdnsEvent) -> Self {
+impl From<mdns::Event> for HelloBehaviourEvent {
+    fn from(event: mdns::Event) -> Self {
         HelloBehaviourEvent::Mdns(event)
     }
 }
@@ -166,10 +166,10 @@ fn handle_request_response_event(
 }
 
 /// handle Mdns event
-fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: MdnsEvent) {
+fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
     let request = HelloRequest("hey".to_string().into_bytes());
     match event {
-        MdnsEvent::Discovered(list) => {
+        mdns::Event::Discovered(list) => {
             let mut new_peers: Vec<PeerId> = Vec::new();
             for (peer, addr) in list {
                 swarm
@@ -189,7 +189,7 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: MdnsEvent) {
                     .send_request(&peer, request.clone());
             }
         }
-        MdnsEvent::Expired(list) => {
+        mdns::Event::Expired(list) => {
             for (peer, addr) in list {
                 if !swarm.behaviour().mdns.has_node(&peer) {
                     swarm.behaviour_mut().request.remove_address(&peer, &addr);
@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let transport = block_on(libp2p::development_transport(local_key))?;
 
     // create mdns
-    let mdns = Mdns::new(MdnsConfig::default())?;
+    let mdns = mdns::Behaviour::new(mdns::Config::default())?;
 
     // create request response
     let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
@@ -220,7 +220,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = HelloBehaviour { request, mdns };
 
     // create swarm
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
