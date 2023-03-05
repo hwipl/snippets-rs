@@ -1,7 +1,6 @@
 use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::gossipsub;
-use libp2p::gossipsub::GossipsubEvent;
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
@@ -18,9 +17,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create gossipsub behaviour
     let message_authenticity = gossipsub::MessageAuthenticity::Signed(local_key);
-    let gossipsub_config = gossipsub::GossipsubConfig::default();
-    let mut behaviour: gossipsub::Gossipsub =
-        gossipsub::Gossipsub::new(message_authenticity, gossipsub_config)?;
+    let gossipsub_config = gossipsub::Config::default();
+    let mut behaviour: gossipsub::Behaviour =
+        gossipsub::Behaviour::new(message_authenticity, gossipsub_config)?;
 
     // subscribe to topic
     let topic = gossipsub::IdentTopic::new("/hello/world");
@@ -45,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     block_on(future::poll_fn(move |cx| loop {
         match swarm.poll_next_unpin(cx) {
             Poll::Ready(Some(event)) => match event {
-                SwarmEvent::Behaviour(GossipsubEvent::Message { message, .. }) => {
+                SwarmEvent::Behaviour(gossipsub::Event::Message { message, .. }) => {
                     println!(
                         "Got message from {:?} to {:?}: {:?}",
                         message.source,
@@ -53,7 +52,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         String::from_utf8_lossy(&message.data)
                     );
                 }
-                SwarmEvent::Behaviour(GossipsubEvent::Subscribed {
+                SwarmEvent::Behaviour(gossipsub::Event::Subscribed {
                     peer_id: _peer_id,
                     topic: _t,
                 }) => {
@@ -64,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .publish(topic.clone(), b"hi".to_vec())
                         .unwrap();
                 }
-                SwarmEvent::Behaviour(GossipsubEvent::Unsubscribed { .. }) => {
+                SwarmEvent::Behaviour(gossipsub::Event::Unsubscribed { .. }) => {
                     // println!("Unsubscribed");
                 }
                 _ => (),
