@@ -157,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     floodsub.subscribe(TOPIC.clone());
 
     // create mdns
-    let mdns = mdns::Behaviour::new(mdns::Config::default())?;
+    let mdns = mdns::Behaviour::new(mdns::Config::default(), PEER_ID.clone())?;
 
     // create behaviour
     let behaviour = PingBehaviour { floodsub, mdns };
