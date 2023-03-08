@@ -3,13 +3,15 @@
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::connection::ConnectionId;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
-use libp2p::swarm::{
-    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, KeepAlive,
-    NegotiatedSubstream, SubstreamProtocol,
+use libp2p::swarm::handler::{
+    ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
 };
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
+use libp2p::swarm::{
+    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, ConnectionId, FromSwarm,
+    KeepAlive, NegotiatedSubstream, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+    SubstreamProtocol,
+};
 use libp2p::{Multiaddr, PeerId};
 use std::collections::VecDeque;
 use std::error::Error;
@@ -96,15 +98,22 @@ impl NetworkBehaviour for HelloWorld {
         Vec::new()
     }
 
-    fn inject_event(&mut self, peer: PeerId, _: ConnectionId, result: HelloWorldResult) {
+    fn on_connection_handler_event(
+        &mut self,
+        peer: PeerId,
+        _: ConnectionId,
+        result: HelloWorldResult,
+    ) {
         self.events.push_front(HelloWorldEvent { peer, result })
     }
+
+    fn on_swarm_event(&mut self, _event: FromSwarm<Self::ConnectionHandler>) {}
 
     fn poll(
         &mut self,
         _: &mut Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HelloWorldEvent, HelloWorldHandler>> {
+    ) -> Poll<NetworkBehaviourAction<HelloWorldEvent, Void>> {
         if let Some(e) = self.events.pop_back() {
             Poll::Ready(NetworkBehaviourAction::GenerateEvent(e))
         } else {
@@ -155,26 +164,44 @@ impl ConnectionHandler for HelloWorldHandler {
         SubstreamProtocol::new(HelloWorldProtocol, ())
     }
 
-    fn inject_fully_negotiated_inbound(&mut self, stream: NegotiatedSubstream, (): ()) {
-        self.inbound = Some(recv_hello_world(stream).boxed());
-    }
+    fn on_behaviour_event(&mut self, _event: Self::InEvent) {}
 
-    fn inject_fully_negotiated_outbound(&mut self, stream: NegotiatedSubstream, (): ()) {
-        self.timer.reset(Duration::new(5, 0));
-        self.outbound = Some(HelloWorldState::HelloWorld(
-            send_hello_world(stream).boxed(),
-        ));
-    }
-
-    fn inject_event(&mut self, _: Void) {}
-
-    fn inject_dial_upgrade_error(&mut self, _info: (), error: ConnectionHandlerUpgrErr<Void>) {
-        self.outbound = None; // Request a new substream on the next `poll`.
-        self.pending_errors.push_front(match error {
-            // Note: This timeout only covers protocol negotiation.
-            ConnectionHandlerUpgrErr::Timeout => HelloWorldFailure::Timeout,
-            e => HelloWorldFailure::Other { error: Box::new(e) },
-        })
+    fn on_connection_event(
+        &mut self,
+        event: ConnectionEvent<
+            '_,
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
+    ) {
+        match event {
+            ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
+                protocol,
+                info: _,
+            }) => {
+                self.inbound = Some(recv_hello_world(protocol).boxed());
+            }
+            ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
+                protocol,
+                info: _,
+            }) => {
+                self.timer.reset(Duration::new(5, 0));
+                self.outbound = Some(HelloWorldState::HelloWorld(
+                    send_hello_world(protocol).boxed(),
+                ));
+            }
+            ConnectionEvent::DialUpgradeError(DialUpgradeError { info: _, error }) => {
+                self.outbound = None; // Request a new substream on the next `poll`.
+                self.pending_errors.push_front(match error {
+                    // Note: This timeout only covers protocol negotiation.
+                    ConnectionHandlerUpgrErr::Timeout => HelloWorldFailure::Timeout,
+                    e => HelloWorldFailure::Other { error: Box::new(e) },
+                })
+            }
+            _ => {}
+        }
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
