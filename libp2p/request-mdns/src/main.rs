@@ -219,9 +219,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
 
-    // listen on loopback interface and random port.
-    swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
-    swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
+    // listen on all addresses and random port.
+    swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
+    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     // start main loop
     let mut listening = false;
