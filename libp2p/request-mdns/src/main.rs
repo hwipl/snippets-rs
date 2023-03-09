@@ -6,10 +6,7 @@ use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
 use libp2p::mdns;
-use libp2p::request_response::{
-    ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
-    RequestResponseEvent, RequestResponseMessage,
-};
+use libp2p::request_response;
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{identity, PeerId};
 use std::error::Error;
@@ -31,7 +28,7 @@ impl ProtocolName for HelloProtocol {
 struct HelloCodec();
 
 #[async_trait]
-impl RequestResponseCodec for HelloCodec {
+impl request_response::Codec for HelloCodec {
     type Protocol = HelloProtocol;
     type Request = HelloRequest;
     type Response = HelloResponse;
@@ -103,18 +100,18 @@ struct HelloResponse(Vec<u8>);
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "HelloBehaviourEvent")]
 struct HelloBehaviour {
-    request: RequestResponse<HelloCodec>,
+    request: request_response::Behaviour<HelloCodec>,
     mdns: mdns::async_io::Behaviour,
 }
 
 #[derive(Debug)]
 enum HelloBehaviourEvent {
-    RequestResponse(RequestResponseEvent<HelloRequest, HelloResponse>),
+    RequestResponse(request_response::Event<HelloRequest, HelloResponse>),
     Mdns(mdns::Event),
 }
 
-impl From<RequestResponseEvent<HelloRequest, HelloResponse>> for HelloBehaviourEvent {
-    fn from(event: RequestResponseEvent<HelloRequest, HelloResponse>) -> Self {
+impl From<request_response::Event<HelloRequest, HelloResponse>> for HelloBehaviourEvent {
+    fn from(event: request_response::Event<HelloRequest, HelloResponse>) -> Self {
         HelloBehaviourEvent::RequestResponse(event)
     }
 }
@@ -128,17 +125,17 @@ impl From<mdns::Event> for HelloBehaviourEvent {
 /// handle RequestResponse event
 fn handle_request_response_event(
     swarm: &mut Swarm<HelloBehaviour>,
-    event: RequestResponseEvent<HelloRequest, HelloResponse>,
+    event: request_response::Event<HelloRequest, HelloResponse>,
 ) {
     // create messages
     let request = HelloRequest("hey".to_string().into_bytes());
     let response = HelloResponse("hi".to_string().into_bytes());
 
     // handle incoming messages
-    if let RequestResponseEvent::Message { peer, message } = event {
+    if let request_response::Event::Message { peer, message } = event {
         match message {
             // handle incoming request message, send back response
-            RequestResponseMessage::Request { channel, .. } => {
+            request_response::Message::Request { channel, .. } => {
                 println!("received request {:?} from {:?}", request, peer);
                 swarm
                     .behaviour_mut()
@@ -149,7 +146,7 @@ fn handle_request_response_event(
             }
 
             // handle incoming response message
-            RequestResponseMessage::Response { response, .. } => {
+            request_response::Message::Response { response, .. } => {
                 println!("received response {:?} from {:?}", response, peer);
                 return;
             }
@@ -157,7 +154,7 @@ fn handle_request_response_event(
     }
 
     // handle response sent event
-    if let RequestResponseEvent::ResponseSent { peer, .. } = event {
+    if let request_response::Event::ResponseSent { peer, .. } = event {
         println!("sent response {:?} to {:?}", response, peer);
         return;
     }
@@ -209,12 +206,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let transport = block_on(libp2p::development_transport(local_key))?;
 
     // create mdns
-    let mdns = mdns::Behaviour::new(mdns::Config::default())?;
+    let mdns = mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?;
 
     // create request response
-    let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
-    let cfg = RequestResponseConfig::default();
-    let request = RequestResponse::new(HelloCodec(), protocols.clone(), cfg.clone());
+    let protocols = iter::once((HelloProtocol(), request_response::ProtocolSupport::Full));
+    let cfg = request_response::Config::default();
+    let request = request_response::Behaviour::new(HelloCodec(), protocols.clone(), cfg.clone());
 
     // create network behaviour
     let behaviour = HelloBehaviour { request, mdns };
