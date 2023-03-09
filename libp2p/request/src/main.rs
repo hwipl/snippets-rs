@@ -5,10 +5,7 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
-use libp2p::request_response::{
-    ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
-    RequestResponseEvent, RequestResponseMessage,
-};
+use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
@@ -30,7 +27,7 @@ impl ProtocolName for HelloProtocol {
 struct HelloCodec();
 
 #[async_trait]
-impl RequestResponseCodec for HelloCodec {
+impl Codec for HelloCodec {
     type Protocol = HelloProtocol;
     type Request = HelloRequest;
     type Response = HelloResponse;
@@ -109,8 +106,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create request response network behaviour
     let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
-    let cfg = RequestResponseConfig::default();
-    let behaviour = RequestResponse::new(HelloCodec(), protocols.clone(), cfg.clone());
+    let cfg = Config::default();
+    let behaviour = Behaviour::new(HelloCodec(), protocols.clone(), cfg.clone());
 
     // create swarm
     let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
@@ -145,10 +142,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         match swarm.poll_next_unpin(cx) {
             Poll::Ready(Some(event)) => match event {
                 // handle incoming request message, send back response
-                SwarmEvent::Behaviour(RequestResponseEvent::Message {
+                SwarmEvent::Behaviour(Event::Message {
                     peer,
                     message:
-                        RequestResponseMessage::Request {
+                        Message::Request {
                             request, channel, ..
                         },
                 }) => {
@@ -160,16 +157,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 // handle incoming response message, stop
-                SwarmEvent::Behaviour(RequestResponseEvent::Message {
+                SwarmEvent::Behaviour(Event::Message {
                     peer,
-                    message: RequestResponseMessage::Response { response, .. },
+                    message: Message::Response { response, .. },
                 }) => {
                     println!("received response {:?} from {:?}", response, peer);
                     return Poll::Ready(());
                 }
 
                 // handle response sent event
-                SwarmEvent::Behaviour(RequestResponseEvent::ResponseSent { peer, .. }) => {
+                SwarmEvent::Behaviour(Event::ResponseSent { peer, .. }) => {
                     println!("sent response {:?} to {:?}", response, peer);
                 }
 
