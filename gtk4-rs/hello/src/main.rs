@@ -1,5 +1,5 @@
 use gtk::prelude::*;
-use gtk::{glib, Application, ApplicationWindow, Button, DropDown, Label, Orientation};
+use gtk::{glib, Application, ApplicationWindow, Button, DropDown, Label, Orientation, StringList};
 
 const APP_ID: &str = "com.github.hwipl.snippets-rs.gtk4-rs.hello";
 
@@ -8,8 +8,8 @@ fn build_ui(app: &Application) {
     let button = Button::builder().label("greet!").build();
 
     // Create a dropdown
-    let options = &["hello!", "hi!", "good day!", "greetings!"];
-    let dropdown = DropDown::from_strings(options);
+    let options = StringList::new(&["hello!", "hi!", "good day!", "greetings!"]);
+    let dropdown = DropDown::builder().model(&options).build();
 
     // Create inner box
     let inner_box = gtk::Box::builder()
@@ -35,8 +35,8 @@ fn build_ui(app: &Application) {
     // Connect to "clicked" signal of `button`
     button.connect_clicked(move |_button| {
         // Set label to selected greeting
-        let s: usize = dropdown.selected().try_into().unwrap();
-        label.set_label(options[s]);
+        let s = dropdown.selected();
+        label.set_label(&options.string(s).unwrap());
     });
 
     // Create a window
