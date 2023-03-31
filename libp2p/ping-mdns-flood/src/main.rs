@@ -5,7 +5,7 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::mdns;
-use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent};
 use libp2p::{identity, PeerId};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -163,7 +163,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = PingBehaviour { floodsub, mdns };
 
     // create swarm
-    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, PEER_ID.clone());
+    let mut swarm =
+        SwarmBuilder::with_async_std_executor(transport, behaviour, PEER_ID.clone()).build();
 
     // listen on all ipv4 and ipv6 addresses and random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
