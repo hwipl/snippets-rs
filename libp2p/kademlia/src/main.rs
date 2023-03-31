@@ -4,7 +4,7 @@ use libp2p::kad::{
     record::store::MemoryStore, record::Key, GetRecordOk::FoundRecord, Kademlia, KademliaConfig,
     KademliaEvent, PeerRecord, QueryResult, Quorum, Record,
 };
-use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
 use std::error::Error;
 use std::str;
@@ -85,7 +85,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
 
     // create swarm
-    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
+    let mut swarm =
+        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
