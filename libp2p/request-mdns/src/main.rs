@@ -7,7 +7,7 @@ use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::core::ProtocolName;
 use libp2p::mdns;
 use libp2p::request_response;
-use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent};
 use libp2p::{identity, PeerId};
 use std::error::Error;
 use std::task::Poll;
@@ -217,7 +217,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let behaviour = HelloBehaviour { request, mdns };
 
     // create swarm
-    let mut swarm = Swarm::with_async_std_executor(transport, behaviour, local_peer_id);
+    let mut swarm =
+        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
 
     // listen on all addresses and random port.
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
