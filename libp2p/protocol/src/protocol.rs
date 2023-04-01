@@ -9,8 +9,7 @@ use libp2p::swarm::handler::{
 };
 use libp2p::swarm::{
     ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, ConnectionId, FromSwarm,
-    KeepAlive, NegotiatedSubstream, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-    SubstreamProtocol,
+    KeepAlive, NegotiatedSubstream, NetworkBehaviour, PollParameters, SubstreamProtocol, ToSwarm,
 };
 use libp2p::{Multiaddr, PeerId};
 use std::collections::VecDeque;
@@ -113,9 +112,9 @@ impl NetworkBehaviour for HelloWorld {
         &mut self,
         _: &mut Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HelloWorldEvent, Void>> {
+    ) -> Poll<ToSwarm<HelloWorldEvent, Void>> {
         if let Some(e) = self.events.pop_back() {
-            Poll::Ready(NetworkBehaviourAction::GenerateEvent(e))
+            Poll::Ready(ToSwarm::GenerateEvent(e))
         } else {
             Poll::Pending
         }
