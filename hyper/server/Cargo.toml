@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hyper = { version = "0.14.24", features = ["server", "http1", "http2", "tcp", "stream"] }
-tokio = { version = "1.26.0", features = ["fs", "macros", "rt", "rt-multi-thread"] }
+hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+tokio = { version = "1.27.0", features = ["fs", "macros", "rt", "rt-multi-thread"] }
 tokio-util = "0.7.7"
