@@ -5,7 +5,7 @@ use libp2p::kad::{
     KademliaEvent, PeerRecord, QueryResult, Quorum, Record,
 };
 use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, Multiaddr, PeerId};
+use libp2p::{identity, Multiaddr, PeerId, StreamProtocol};
 use std::error::Error;
 use std::str;
 
@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create kademlia behaviour
     let store = MemoryStore::new(local_peer_id.clone());
     let mut config = KademliaConfig::default();
-    config.set_protocol_names(vec!["/hello/world/0.1.0".as_bytes().into()]);
+    config.set_protocol_names(vec![StreamProtocol::new("/hello/world/0.1.0")]);
     let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
 
     // create swarm
