@@ -58,7 +58,7 @@ impl PingMessage {
 
 // custom network behaviour with floodsub and mdns
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "PingBehaviourEvent")]
+#[behaviour(to_swarm = "PingBehaviourEvent")]
 struct PingBehaviour {
     floodsub: Floodsub,
     mdns: mdns::async_io::Behaviour,
