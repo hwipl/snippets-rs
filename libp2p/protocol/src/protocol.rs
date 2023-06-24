@@ -3,15 +3,16 @@
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
+use libp2p::core::{Endpoint, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use libp2p::swarm::handler::{
     ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
 };
 use libp2p::swarm::{
-    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, ConnectionId, FromSwarm,
-    KeepAlive, NegotiatedSubstream, NetworkBehaviour, PollParameters, SubstreamProtocol, ToSwarm,
+    ConnectionDenied, ConnectionHandler, ConnectionHandlerEvent, ConnectionId, FromSwarm,
+    KeepAlive, NetworkBehaviour, PollParameters, Stream, StreamUpgradeError, SubstreamProtocol,
+    ToSwarm,
 };
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, StreamProtocol};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
@@ -87,14 +88,26 @@ impl HelloWorld {
 
 impl NetworkBehaviour for HelloWorld {
     type ConnectionHandler = HelloWorldHandler;
-    type OutEvent = HelloWorldEvent;
+    type ToSwarm = HelloWorldEvent;
 
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        HelloWorldHandler::new()
+    fn handle_established_inbound_connection(
+        &mut self,
+        _: ConnectionId,
+        _: PeerId,
+        _: &Multiaddr,
+        _: &Multiaddr,
+    ) -> Result<Self::ConnectionHandler, ConnectionDenied> {
+        Ok(HelloWorldHandler::new())
     }
 
-    fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
-        Vec::new()
+    fn handle_established_outbound_connection(
+        &mut self,
+        _: ConnectionId,
+        _: PeerId,
+        _: &Multiaddr,
+        _: Endpoint,
+    ) -> Result<Self::ConnectionHandler, ConnectionDenied> {
+        Ok(HelloWorldHandler::new())
     }
 
     fn on_connection_handler_event(
@@ -151,8 +164,8 @@ impl HelloWorldHandler {
 }
 
 impl ConnectionHandler for HelloWorldHandler {
-    type InEvent = Void;
-    type OutEvent = HelloWorldResult;
+    type FromBehaviour = Void;
+    type ToBehaviour = HelloWorldResult;
     type Error = HelloWorldFailure;
     type InboundProtocol = HelloWorldProtocol;
     type OutboundProtocol = HelloWorldProtocol;
@@ -163,7 +176,7 @@ impl ConnectionHandler for HelloWorldHandler {
         SubstreamProtocol::new(HelloWorldProtocol, ())
     }
 
-    fn on_behaviour_event(&mut self, _event: Self::InEvent) {}
+    fn on_behaviour_event(&mut self, _event: Self::FromBehaviour) {}
 
     fn on_connection_event(
         &mut self,
@@ -195,7 +208,7 @@ impl ConnectionHandler for HelloWorldHandler {
                 self.outbound = None; // Request a new substream on the next `poll`.
                 self.pending_errors.push_front(match error {
                     // Note: This timeout only covers protocol negotiation.
-                    ConnectionHandlerUpgrErr::Timeout => HelloWorldFailure::Timeout,
+                    StreamUpgradeError::Timeout => HelloWorldFailure::Timeout,
                     e => HelloWorldFailure::Other { error: Box::new(e) },
                 })
             }
@@ -222,7 +235,7 @@ impl ConnectionHandler for HelloWorldHandler {
                 Poll::Ready(Ok(stream)) => {
                     // hello world from a remote peer received, wait for next.
                     self.inbound = Some(recv_hello_world(stream).boxed());
-                    return Poll::Ready(ConnectionHandlerEvent::Custom(Ok(
+                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(Ok(
                         HelloWorldSuccess::Received,
                     )));
                 }
@@ -250,7 +263,7 @@ impl ConnectionHandler for HelloWorldHandler {
                     Poll::Ready(Ok(stream)) => {
                         self.timer.reset(Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::Idle(stream));
-                        return Poll::Ready(ConnectionHandlerEvent::Custom(Ok(
+                        return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(Ok(
                             HelloWorldSuccess::Sent,
                         )));
                     }
@@ -290,14 +303,14 @@ impl ConnectionHandler for HelloWorldHandler {
     }
 }
 
-type HelloWorldFuture = BoxFuture<'static, Result<NegotiatedSubstream, io::Error>>;
+type HelloWorldFuture = BoxFuture<'static, Result<Stream, io::Error>>;
 
 /// The current state w.r.t. outbound hello world messages.
 enum HelloWorldState {
     /// A new substream is being negotiated for the hello world protocol.
     OpenStream,
     /// The substream is idle, waiting to send the next hello world.
-    Idle(NegotiatedSubstream),
+    Idle(Stream),
     /// A hello world is being sent.
     HelloWorld(HelloWorldFuture),
 }
@@ -309,30 +322,30 @@ pub struct HelloWorldProtocol;
 const HELLO_WORLD_MSG: &[u8] = b"hi";
 
 impl UpgradeInfo for HelloWorldProtocol {
-    type Info = &'static [u8];
+    type Info = StreamProtocol;
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(b"/hello/world/1.0.0")
+        iter::once(StreamProtocol::new("/hello/world/1.0.0"))
     }
 }
 
-impl InboundUpgrade<NegotiatedSubstream> for HelloWorldProtocol {
-    type Output = NegotiatedSubstream;
+impl InboundUpgrade<Stream> for HelloWorldProtocol {
+    type Output = Stream;
     type Error = Void;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_inbound(self, stream: NegotiatedSubstream, _: Self::Info) -> Self::Future {
+    fn upgrade_inbound(self, stream: Stream, _: Self::Info) -> Self::Future {
         future::ok(stream)
     }
 }
 
-impl OutboundUpgrade<NegotiatedSubstream> for HelloWorldProtocol {
-    type Output = NegotiatedSubstream;
+impl OutboundUpgrade<Stream> for HelloWorldProtocol {
+    type Output = Stream;
     type Error = Void;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_outbound(self, stream: NegotiatedSubstream, _: Self::Info) -> Self::Future {
+    fn upgrade_outbound(self, stream: Stream, _: Self::Info) -> Self::Future {
         future::ok(stream)
     }
 }
