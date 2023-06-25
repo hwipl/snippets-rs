@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
-use libp2p::core::ProtocolName;
 use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
 use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
 use libp2p::{identity, Multiaddr, PeerId};
@@ -16,14 +15,14 @@ use std::{io, iter};
 #[derive(Debug, Clone)]
 struct HelloProtocol();
 
-impl ProtocolName for HelloProtocol {
-    fn protocol_name(&self) -> &[u8] {
-        "/hello/0.0.1".as_bytes()
+impl AsRef<str> for HelloProtocol {
+    fn as_ref(&self) -> &str {
+        "/hello/0.0.1"
     }
 }
 
 /// Hello codec for the request response behaviour
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct HelloCodec();
 
 #[async_trait]
@@ -107,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // create request response network behaviour
     let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
     let cfg = Config::default();
-    let behaviour = Behaviour::new(HelloCodec(), protocols.clone(), cfg.clone());
+    let behaviour: Behaviour<HelloCodec> = Behaviour::new(protocols.clone(), cfg.clone());
 
     // create swarm
     let mut swarm =
