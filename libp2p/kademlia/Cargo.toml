@@ -5,5 +5,5 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-libp2p = { version = "0.52.3", features = ["kad", "tcp", "dns", "async-std", "websocket", "noise", "yamux"] }
+libp2p = { version = "0.52.4", features = ["async-std", "tcp", "tls","noise", "yamux","dns", "kad"]}
 futures = "0.3.28"

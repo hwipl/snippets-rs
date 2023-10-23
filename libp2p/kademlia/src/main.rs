@@ -1,11 +1,11 @@
 use futures::{executor::block_on, StreamExt};
 use libp2p::core::ConnectedPoint;
 use libp2p::kad::{
-    record::store::MemoryStore, record::Key, GetRecordOk::FoundRecord, Kademlia, KademliaConfig,
-    KademliaEvent, PeerRecord, QueryResult, Quorum, Record,
+    self, record::store::MemoryStore, record::Key, GetRecordOk::FoundRecord, PeerRecord,
+    QueryResult, Quorum, Record,
 };
-use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, Multiaddr, PeerId, StreamProtocol};
+use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::{Multiaddr, PeerId, StreamProtocol, SwarmBuilder};
 use std::error::Error;
 use std::str;
 
@@ -23,12 +23,12 @@ fn handle_peer_records(peer_record: PeerRecord) {
 }
 
 // handle swarm events
-async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
+async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
     loop {
         match swarm.select_next_some().await {
             SwarmEvent::Behaviour(event) => match event {
-                KademliaEvent::InboundRequest { .. } => (),
-                KademliaEvent::OutboundQueryProgressed { result, .. } => {
+                kad::Event::InboundRequest { .. } => (),
+                kad::Event::OutboundQueryProgressed { result, .. } => {
                     // handle query result
                     match result {
                         QueryResult::GetRecord(Ok(FoundRecord(record))) => {
@@ -38,10 +38,10 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
                         _ => (),
                     }
                 }
-                KademliaEvent::RoutingUpdated { .. } => (),
-                KademliaEvent::UnroutablePeer { .. } => (),
-                KademliaEvent::RoutablePeer { .. } => (),
-                KademliaEvent::PendingRoutablePeer { .. } => (),
+                kad::Event::RoutingUpdated { .. } => (),
+                kad::Event::UnroutablePeer { .. } => (),
+                kad::Event::RoutablePeer { .. } => (),
+                kad::Event::PendingRoutablePeer { .. } => (),
             },
             SwarmEvent::NewListenAddr { address: addr, .. } => println!("Listening on {}", addr),
             SwarmEvent::ConnectionEstablished {
@@ -70,23 +70,29 @@ async fn handle_events(swarm: &mut Swarm<Kademlia<MemoryStore>>) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
-
-    // create kademlia behaviour
-    let store = MemoryStore::new(local_peer_id.clone());
-    let mut config = KademliaConfig::default();
-    config.set_protocol_names(vec![StreamProtocol::new("/hello/world/0.1.0")]);
-    let behaviour = Kademlia::with_config(local_peer_id.clone(), store, config);
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|key| {
+            // create kademlia behaviour
+            let store = MemoryStore::new(key.public().to_peer_id());
+            let mut config = kad::Config::default();
+            config.set_protocol_names(vec![StreamProtocol::new("/hello/world/0.1.0")]);
+            let behaviour = kad::Behaviour::with_config(key.public().to_peer_id(), store, config);
+
+            Ok(behaviour)
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
