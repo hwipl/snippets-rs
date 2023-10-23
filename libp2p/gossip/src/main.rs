@@ -1,33 +1,38 @@
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::gossipsub;
-use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, Multiaddr, PeerId};
+use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::Multiaddr;
+use libp2p::{gossipsub, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key.clone()))?;
-
-    // create gossipsub behaviour
-    let message_authenticity = gossipsub::MessageAuthenticity::Signed(local_key);
-    let gossipsub_config = gossipsub::Config::default();
-    let mut behaviour: gossipsub::Behaviour =
-        gossipsub::Behaviour::new(message_authenticity, gossipsub_config)?;
+    // create swarm
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|key| {
+            // create gossipsub behaviour
+            let message_authenticity = gossipsub::MessageAuthenticity::Signed(key.clone());
+            let gossipsub_config = gossipsub::Config::default();
+            let behaviour: gossipsub::Behaviour =
+                gossipsub::Behaviour::new(message_authenticity, gossipsub_config)?;
+            Ok(behaviour)
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // subscribe to topic
     let topic = gossipsub::IdentTopic::new("/hello/world");
-    behaviour.subscribe(&topic).unwrap();
-
-    // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    swarm.behaviour_mut().subscribe(&topic).unwrap();
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
