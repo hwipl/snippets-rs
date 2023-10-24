@@ -4,18 +4,13 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
-use libp2p::mdns;
-use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, PeerId};
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
+use libp2p::{mdns, PeerId, SwarmBuilder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
-
-// key pair and peer id
-static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
-static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from(KEYS.public()));
 
 // floodsub topic
 static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
@@ -106,7 +101,7 @@ fn handle_floodsub_event(swarm: &mut Swarm<PingBehaviour>, event: FloodsubEvent)
                     Ok(peer) => peer,
                     Err(_) => return,
                 };
-                if peer != PEER_ID.clone() {
+                if peer != swarm.local_peer_id().clone() {
                     return;
                 }
                 println!("Received ping reply from {:?}", message.source);
@@ -144,27 +139,33 @@ fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: mdns::Event) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // show peer id
-    println!("Local node: {:?}", PEER_ID.clone());
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(KEYS.clone()))?;
-
-    // create floodsub
-    let mut floodsub = Floodsub::new(PEER_ID.clone());
-
-    // subscribe to floodsub topic
-    floodsub.subscribe(TOPIC.clone());
-
-    // create mdns
-    let mdns = mdns::Behaviour::new(mdns::Config::default(), PEER_ID.clone())?;
-
-    // create behaviour
-    let behaviour = PingBehaviour { floodsub, mdns };
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, PEER_ID.clone()).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|key| {
+            // create floodsub
+            let mut floodsub = Floodsub::new(key.public().to_peer_id());
+
+            // subscribe to floodsub topic
+            floodsub.subscribe(TOPIC.clone());
+
+            // create mdns
+            let mdns = mdns::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
+
+            // create behaviour
+            Ok(PingBehaviour { floodsub, mdns })
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on all ipv4 and ipv6 addresses and random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
