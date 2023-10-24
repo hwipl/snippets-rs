@@ -2,43 +2,32 @@
 
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::swarm::{keep_alive, NetworkBehaviour, Swarm, SwarmBuilder};
-use libp2p::{identity, ping, Multiaddr, PeerId};
+use libp2p::swarm::Swarm;
+use libp2p::{ping, Multiaddr, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
 use std::time::Duration;
 
-/// Ping network behaviour
-#[derive(NetworkBehaviour)]
-struct PingBehaviour {
-    keep_alive: keep_alive::Behaviour,
-    ping: ping::Behaviour,
-}
-
-impl PingBehaviour {
-    fn new() -> Self {
-        PingBehaviour {
-            keep_alive: keep_alive::Behaviour::default(),
-            ping: ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(1))),
-        }
-    }
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
-
-    // create a ping network behaviour that pings every seconds
-    let behaviour = PingBehaviour::new();
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|_key| {
+            // create a ping network behaviour that pings every seconds
+            ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(1)))
+        })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX)))
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
