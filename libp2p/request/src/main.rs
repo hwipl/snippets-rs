@@ -5,8 +5,8 @@ use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
-use libp2p::swarm::{Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, Multiaddr, PeerId};
+use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::{Multiaddr, PeerId, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
 use std::{io, iter};
@@ -95,22 +95,26 @@ struct HelloRequest(Vec<u8>);
 struct HelloResponse(Vec<u8>);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
-
-    // create request response network behaviour
-    let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
-    let cfg = Config::default();
-    let behaviour: Behaviour<HelloCodec> = Behaviour::new(protocols.clone(), cfg.clone());
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|_key| {
+            // create request response network behaviour
+            let protocols = iter::once((HelloProtocol(), ProtocolSupport::Full));
+            let cfg = Config::default();
+            Behaviour::<HelloCodec>::new(protocols.clone(), cfg.clone())
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
