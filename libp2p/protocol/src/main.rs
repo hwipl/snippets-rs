@@ -4,28 +4,31 @@ mod protocol;
 
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::swarm::{Swarm, SwarmBuilder};
-use libp2p::{identity, Multiaddr, PeerId};
+use libp2p::{Multiaddr, Swarm, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
 
 use protocol::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
-
-    // create a hello world network behaviour that sends hello world messages
-    let behaviour = HelloWorld::new();
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|_key| {
+            // create a hello world network behaviour that sends hello world messages
+            HelloWorld::new()
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
