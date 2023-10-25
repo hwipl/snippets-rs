@@ -6,8 +6,8 @@ use futures::prelude::*;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::mdns;
 use libp2p::request_response;
-use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent};
-use libp2p::{identity, PeerId};
+use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
+use libp2p::{PeerId, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
 use std::{io, iter};
@@ -196,28 +196,32 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // create key and peer id
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
-
-    // create transport
-    let transport = block_on(libp2p::development_transport(local_key))?;
-
-    // create mdns
-    let mdns = mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?;
-
-    // create request response
-    let protocols = iter::once((HelloProtocol(), request_response::ProtocolSupport::Full));
-    let cfg = request_response::Config::default();
-    let request = request_response::Behaviour::new(protocols.clone(), cfg.clone());
-
-    // create network behaviour
-    let behaviour = HelloBehaviour { request, mdns };
-
     // create swarm
-    let mut swarm =
-        SwarmBuilder::with_async_std_executor(transport, behaviour, local_peer_id).build();
+    let builder = block_on(
+        SwarmBuilder::with_new_identity()
+            .with_async_std()
+            .with_tcp(
+                Default::default(),
+                (libp2p::tls::Config::new, libp2p::noise::Config::new),
+                libp2p::yamux::Config::default,
+            )?
+            .with_dns(),
+    )?;
+    let mut swarm = builder
+        .with_behaviour(|key| {
+            // create mdns
+            let mdns = mdns::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
+
+            // create request response
+            let protocols = iter::once((HelloProtocol(), request_response::ProtocolSupport::Full));
+            let cfg = request_response::Config::default();
+            let request = request_response::Behaviour::new(protocols.clone(), cfg.clone());
+
+            // create network behaviour
+            Ok(HelloBehaviour { request, mdns })
+        })?
+        .build();
+    println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on all addresses and random port.
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
