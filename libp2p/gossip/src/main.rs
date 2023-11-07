@@ -5,6 +5,7 @@ use libp2p::Multiaddr;
 use libp2p::{gossipsub, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
@@ -27,6 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 gossipsub::Behaviour::new(message_authenticity, gossipsub_config)?;
             Ok(behaviour)
         })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(5)))
         .build();
     println!("Local peer id: {:?}", swarm.local_peer_id());
 
