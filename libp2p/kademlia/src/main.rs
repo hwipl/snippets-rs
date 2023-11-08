@@ -1,13 +1,14 @@
 use futures::{executor::block_on, StreamExt};
 use libp2p::core::ConnectedPoint;
 use libp2p::kad::{
-    self, record::store::MemoryStore, record::Key, GetRecordOk::FoundRecord, PeerRecord,
-    QueryResult, Quorum, Record,
+    self, store::MemoryStore, GetRecordOk::FoundRecord, PeerRecord, QueryResult, Quorum, Record,
+    RecordKey,
 };
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{Multiaddr, PeerId, StreamProtocol, SwarmBuilder};
 use std::error::Error;
 use std::str;
+use std::time::Duration;
 
 const KEY: &str = "hello world";
 
@@ -42,6 +43,7 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
                 kad::Event::UnroutablePeer { .. } => (),
                 kad::Event::RoutablePeer { .. } => (),
                 kad::Event::PendingRoutablePeer { .. } => (),
+                kad::Event::ModeChanged { .. } => (),
             },
             SwarmEvent::NewListenAddr { address: addr, .. } => println!("Listening on {}", addr),
             SwarmEvent::ConnectionEstablished {
@@ -64,7 +66,7 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
                         .remove_address(&peer_id, &send_back_addr);
                 }
             }
-            _ => println!(),
+            _ => (),
         }
     }
 }
@@ -91,12 +93,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             Ok(behaviour)
         })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(5)))
         .build();
     println!("Local peer id: {:?}", swarm.local_peer_id());
 
     // listen on loopback interface and random port.
     swarm.listen_on("/ip6/::1/tcp/0".parse()?)?;
     swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
+
+    // set mode to server
+    swarm.behaviour_mut().set_mode(Some(kad::Mode::Server));
 
     // connect to peer in first command line argument if present
     if let Some(addr) = std::env::args().nth(1) {
@@ -110,11 +116,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         swarm.behaviour_mut().add_address(&peer_id, remote);
 
         // request hello world message from the dht
-        swarm.behaviour_mut().get_record(Key::new(&KEY));
+        swarm.behaviour_mut().get_record(RecordKey::new(&KEY));
     } else {
         // store the hello world message in the dht
         let record = Record {
-            key: Key::new(&KEY),
+            key: RecordKey::new(&KEY),
             value: b"hi".to_vec(),
             publisher: None,
             expires: None,
