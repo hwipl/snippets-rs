@@ -5,9 +5,9 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-libp2p = { version = "0.52.4", features = ["async-std", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
-futures = "0.3.28"
+libp2p = { version = "0.53.0", features = ["async-std", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
+futures = "0.3.29"
 futures-timer = "3.0.2"
 once_cell = "1.18.0"
-serde = { version = "1.0.189", features = ["derive"] }
+serde = { version = "1.0.191", features = ["derive"] }
 serde_cbor = "0.11.2"

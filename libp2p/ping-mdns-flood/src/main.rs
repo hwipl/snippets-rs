@@ -127,7 +127,12 @@ fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: mdns::Event) {
         }
         mdns::Event::Expired(list) => {
             for (peer, _) in list {
-                if !swarm.behaviour().mdns.has_node(&peer) {
+                if !swarm
+                    .behaviour()
+                    .mdns
+                    .discovered_nodes()
+                    .any(|x| x == &peer)
+                {
                     swarm
                         .behaviour_mut()
                         .floodsub
@@ -164,6 +169,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             // create behaviour
             Ok(PingBehaviour { floodsub, mdns })
         })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(5)))
         .build();
     println!("Local peer id: {:?}", swarm.local_peer_id());
 
