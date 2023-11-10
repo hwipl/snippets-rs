@@ -9,8 +9,7 @@ use libp2p::swarm::handler::{
 };
 use libp2p::swarm::{
     ConnectionDenied, ConnectionHandler, ConnectionHandlerEvent, ConnectionId, FromSwarm,
-    KeepAlive, NetworkBehaviour, PollParameters, Stream, StreamUpgradeError, SubstreamProtocol,
-    ToSwarm,
+    NetworkBehaviour, Stream, StreamUpgradeError, SubstreamProtocol, ToSwarm,
 };
 use libp2p::{Multiaddr, PeerId, StreamProtocol};
 use std::collections::VecDeque;
@@ -119,13 +118,9 @@ impl NetworkBehaviour for HelloWorld {
         self.events.push_front(HelloWorldEvent { peer, result })
     }
 
-    fn on_swarm_event(&mut self, _event: FromSwarm<Self::ConnectionHandler>) {}
+    fn on_swarm_event(&mut self, _event: FromSwarm) {}
 
-    fn poll(
-        &mut self,
-        _: &mut Context<'_>,
-        _: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<HelloWorldEvent, Void>> {
+    fn poll(&mut self, _: &mut Context<'_>) -> Poll<ToSwarm<HelloWorldEvent, Void>> {
         if let Some(e) = self.events.pop_back() {
             Poll::Ready(ToSwarm::GenerateEvent(e))
         } else {
@@ -166,7 +161,6 @@ impl HelloWorldHandler {
 impl ConnectionHandler for HelloWorldHandler {
     type FromBehaviour = Void;
     type ToBehaviour = HelloWorldResult;
-    type Error = HelloWorldFailure;
     type InboundProtocol = HelloWorldProtocol;
     type OutboundProtocol = HelloWorldProtocol;
     type OutboundOpenInfo = ();
@@ -216,14 +210,10 @@ impl ConnectionHandler for HelloWorldHandler {
         }
     }
 
-    fn connection_keep_alive(&self) -> KeepAlive {
-        KeepAlive::Yes
-    }
-
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<ConnectionHandlerEvent<HelloWorldProtocol, (), HelloWorldResult, Self::Error>> {
+    ) -> Poll<ConnectionHandlerEvent<HelloWorldProtocol, (), HelloWorldResult>> {
         // Respond to inbound hello world messages.
         if let Some(fut) = self.inbound.as_mut() {
             match fut.poll_unpin(cx) {
@@ -246,7 +236,7 @@ impl ConnectionHandler for HelloWorldHandler {
             // Check for outbound hello world failures.
             if let Some(error) = self.pending_errors.pop_back() {
                 log::debug!("Hello world failure: {:?}", error);
-                return Poll::Ready(ConnectionHandlerEvent::Close(error));
+                return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(Err(error)));
             }
 
             // Continue outbound hello world messages.
