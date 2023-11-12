@@ -3,12 +3,12 @@
 use async_trait::async_trait;
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{Multiaddr, PeerId, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
+use std::time::Duration;
 use std::{io, iter};
 
 /// Hello protocol for the request response behaviour
@@ -35,13 +35,12 @@ impl Codec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_length_prefixed(io, 1024)
-            .map(|res| match res {
-                Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-                Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
-                Ok(vec) => Ok(HelloRequest(vec)),
-            })
-            .await
+        let mut vec = Vec::new();
+        io.take(1024).read_to_end(&mut vec).await?;
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        Ok(HelloRequest(vec))
     }
 
     async fn read_response<T>(
@@ -52,13 +51,13 @@ impl Codec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_length_prefixed(io, 1024)
-            .map(|res| match res {
-                Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-                Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
-                Ok(vec) => Ok(HelloResponse(vec)),
-            })
-            .await
+        // TODO: add length
+        let mut vec = Vec::new();
+        io.take(1024).read_to_end(&mut vec).await?;
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        Ok(HelloResponse(vec))
     }
 
     async fn write_request<T>(
@@ -70,7 +69,7 @@ impl Codec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_length_prefixed(io, data).await
+        io.write_all(data.as_ref()).await
     }
 
     async fn write_response<T>(
@@ -82,7 +81,7 @@ impl Codec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_length_prefixed(io, data).await
+        io.write_all(data.as_ref()).await
     }
 }
 
@@ -113,6 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let cfg = Config::default();
             Behaviour::<HelloCodec>::new(protocols.clone(), cfg.clone())
         })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(5)))
         .build();
     println!("Local peer id: {:?}", swarm.local_peer_id());
 
