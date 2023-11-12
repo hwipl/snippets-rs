@@ -3,14 +3,15 @@
 use async_trait::async_trait;
 use futures::executor::block_on;
 use futures::prelude::*;
-use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::mdns;
 use libp2p::request_response;
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{PeerId, SwarmBuilder};
 use std::error::Error;
 use std::task::Poll;
+use std::time::Duration;
 use std::{io, iter};
+use tracing_subscriber::EnvFilter;
 
 /// Hello protocol for the request response behaviour
 #[derive(Debug, Clone)]
@@ -36,13 +37,14 @@ impl request_response::Codec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_length_prefixed(io, 1024)
-            .map(|res| match res {
-                Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-                Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
-                Ok(vec) => Ok(HelloRequest(vec)),
-            })
-            .await
+        // TODO: add length
+        let mut vec = Vec::new();
+        io.take(1024).read_to_end(&mut vec).await?;
+        if vec.is_empty() {
+            // println!("1e");
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        Ok(HelloRequest(vec))
     }
 
     async fn read_response<T>(
@@ -53,13 +55,13 @@ impl request_response::Codec for HelloCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        read_length_prefixed(io, 1024)
-            .map(|res| match res {
-                Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-                Ok(vec) if vec.is_empty() => Err(io::ErrorKind::UnexpectedEof.into()),
-                Ok(vec) => Ok(HelloResponse(vec)),
-            })
-            .await
+        let mut vec = Vec::new();
+        io.take(1024).read_to_end(&mut vec).await?;
+        if vec.is_empty() {
+            // println!("2e");
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        Ok(HelloResponse(vec))
     }
 
     async fn write_request<T>(
@@ -71,7 +73,7 @@ impl request_response::Codec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_length_prefixed(io, data).await
+        io.write_all(data.as_ref()).await
     }
 
     async fn write_response<T>(
@@ -83,7 +85,7 @@ impl request_response::Codec for HelloCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        write_length_prefixed(io, data).await
+        io.write_all(data.as_ref()).await
     }
 }
 
@@ -187,7 +189,12 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
         }
         mdns::Event::Expired(list) => {
             for (peer, addr) in list {
-                if !swarm.behaviour().mdns.has_node(&peer) {
+                if !swarm
+                    .behaviour()
+                    .mdns
+                    .discovered_nodes()
+                    .any(|x| x == &peer)
+                {
                     swarm.behaviour_mut().request.remove_address(&peer, &addr);
                 }
             }
@@ -196,6 +203,10 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .try_init();
+
     // create swarm
     let builder = block_on(
         SwarmBuilder::with_new_identity()
@@ -220,6 +231,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             // create network behaviour
             Ok(HelloBehaviour { request, mdns })
         })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(10)))
         .build();
     println!("Local peer id: {:?}", swarm.local_peer_id());
 
