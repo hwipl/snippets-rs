@@ -1,21 +1,27 @@
-use hyper::server::conn::AddrStream;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use futures_util::TryStreamExt;
+use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Empty, Full, StreamBody};
+use hyper::body::{Bytes, Frame};
+use hyper::service::service_fn;
+use hyper::{Method, Request, Response, StatusCode};
+use hyper_util::rt::TokioIo;
+use hyper_util::server;
 use std::convert::Infallible;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::fs::File;
-use tokio_util::codec::{BytesCodec, FramedRead};
+use tokio::net::TcpListener;
+use tokio_util::io::ReaderStream;
 
-fn bad_request() -> Result<Response<Body>, Infallible> {
+fn bad_request() -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     Ok(Response::builder()
         .status(StatusCode::BAD_REQUEST)
-        .body(Body::empty())
+        .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap())
 }
 
-fn get_local_path(req: &Request<Body>) -> PathBuf {
+fn get_local_path(req: &Request<hyper::body::Incoming>) -> PathBuf {
     let mut path = req.uri().path();
     if path.len() > 0 {
         path = &path[1..];
@@ -23,7 +29,7 @@ fn get_local_path(req: &Request<Body>) -> PathBuf {
     env::current_dir().unwrap().join(path)
 }
 
-fn get_uri_path_parent(req: &Request<Body>) -> &str {
+fn get_uri_path_parent(req: &Request<hyper::body::Incoming>) -> &str {
     let path = req.uri().path();
     match path.rsplit_once("/") {
         Some(("", _right)) => "/",
@@ -32,7 +38,7 @@ fn get_uri_path_parent(req: &Request<Body>) -> &str {
     }
 }
 
-async fn is_local_dir(req: &Request<Body>) -> bool {
+async fn is_local_dir(req: &Request<hyper::body::Incoming>) -> bool {
     let path = get_local_path(&req);
     match tokio::fs::metadata(path).await {
         Ok(metadata) => metadata.is_dir(),
@@ -40,7 +46,7 @@ async fn is_local_dir(req: &Request<Body>) -> bool {
     }
 }
 
-async fn get_local_dir_html(req: &Request<Body>) -> String {
+async fn get_local_dir_html(req: &Request<hyper::body::Incoming>) -> String {
     let req_path = req.uri().path();
     let mut html = format!(
         "<!DOCTYPE html><html><head><title>{0}</title></head><body><ul><li><a href={1}>..</a></li>",
@@ -75,19 +81,23 @@ async fn get_local_dir_html(req: &Request<Body>) -> String {
     html
 }
 
-async fn handle_get_dir(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get_dir(
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     let html = get_local_dir_html(&req).await;
-    let body = Body::from(html);
-    Ok(Response::new(body))
+    let body = Full::from(html);
+    Ok(Response::new(body.map_err(|e| match e {}).boxed()))
 }
 
-async fn handle_get_file(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get_file(
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     let path = get_local_path(&req);
     match File::open(path).await {
         Ok(file) => {
-            let stream = FramedRead::new(file, BytesCodec::new());
-            let body = Body::wrap_stream(stream);
-            Ok(Response::new(body))
+            let stream = ReaderStream::new(file);
+            let body = StreamBody::new(stream.map_ok(Frame::data));
+            Ok(Response::new(body.boxed()))
         }
         _ => bad_request(),
     }
@@ -95,8 +105,8 @@ async fn handle_get_file(req: Request<Body>) -> Result<Response<Body>, Infallibl
 
 async fn handle_get(
     remote_addr: SocketAddr,
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     println!("{} {} {}", remote_addr, req.method(), req.uri().path());
 
     if is_local_dir(&req).await {
@@ -106,7 +116,10 @@ async fn handle_get(
     }
 }
 
-async fn handle(remote_addr: SocketAddr, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle(
+    remote_addr: SocketAddr,
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     match req.method() {
         &Method::GET => handle_get(remote_addr, req).await,
         _ => bad_request(),
@@ -114,20 +127,31 @@ async fn handle(remote_addr: SocketAddr, req: Request<Body>) -> Result<Response<
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
-    // create request handler that uses remote address
-    let make_service = make_service_fn(|conn: &AddrStream| {
-        let remote_addr = conn.remote_addr();
-        let service = service_fn(move |req| handle(remote_addr, req));
+    // create listener
+    let listener = TcpListener::bind(addr).await?;
 
-        async move { Ok::<_, Infallible>(service) }
-    });
+    // main loop
+    loop {
+        // get connection from listeneer
+        let (stream, remote_addr) = listener.accept().await?;
+        let io = TokioIo::new(stream);
 
-    let server = Server::bind(&addr).serve(make_service);
-
-    if let Err(e) = server.await {
-        eprintln!("server error: {}", e);
+        // handle connection
+        tokio::task::spawn(async move {
+            if let Err(err) = server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                .serve_connection(
+                    io,
+                    service_fn(|req: Request<hyper::body::Incoming>| async move {
+                        handle(remote_addr, req).await
+                    }),
+                )
+                .await
+            {
+                eprintln!("server error: {}", err);
+            }
+        });
     }
 }
