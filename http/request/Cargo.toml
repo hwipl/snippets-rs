@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-http = "0.2.8"
+http = "1.0.0"
