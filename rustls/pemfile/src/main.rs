@@ -13,9 +13,9 @@ fn parse_pem_file(file: String) -> std::io::Result<()> {
     for item in iter::from_fn(|| read_one(&mut reader).transpose()) {
         match item.unwrap() {
             Item::X509Certificate(cert) => println!("certificate {cert:?}"),
-            Item::RSAKey(key) => println!("rsa pkcs1 key {key:?}"),
-            Item::PKCS8Key(key) => println!("pkcs8 key {key:?}"),
-            Item::ECKey(key) => println!("sec1 ec key {key:?}"),
+            Item::Pkcs1Key(key) => println!("rsa pkcs1 key {key:?}"),
+            Item::Pkcs8Key(key) => println!("pkcs8 key {key:?}"),
+            Item::Sec1Key(key) => println!("sec1 ec key {key:?}"),
             _ => println!("unhandled item"),
         }
     }
