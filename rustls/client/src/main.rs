@@ -45,17 +45,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     // load certificates
     let mut roots = rustls::RootCertStore::empty();
     for cert in rustls_native_certs::load_native_certs()? {
-        roots.add(&rustls::Certificate(cert.0))?;
+        roots.add(cert)?;
     }
 
     // create config
     let config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(roots)
         .with_no_client_auth();
 
     // connect to server
-    let mut conn = rustls::ClientConnection::new(Arc::new(config), addr.as_str().try_into()?)?;
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), addr.clone().try_into()?)?;
     let mut sock = connect(format!("{}:{}", addr, port))?;
     let mut tls = rustls::Stream::new(&mut conn, &mut sock);
 
