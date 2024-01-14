@@ -1,29 +1,33 @@
-use futures_util::StreamExt;
-use hyper::server::accept;
-use hyper::server::conn::{AddrIncoming, AddrStream};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use futures_util::TryStreamExt;
+use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Empty, Full, StreamBody};
+use hyper::body::{Bytes, Frame, Incoming};
+use hyper::service::service_fn;
+use hyper::{Method, Request, Response, StatusCode};
+use hyper_util::rt::TokioIo;
+use hyper_util::server;
 use rcgen::generate_simple_self_signed;
 use std::convert::Infallible;
 use std::env;
-use std::future::ready;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tls_listener::TlsListener;
 use tokio::fs::File;
-use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
+use tokio::net::TcpListener;
+use tokio_rustls::rustls::pki_types::PrivatePkcs8KeyDer;
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
-use tokio_util::codec::{BytesCodec, FramedRead};
+use tokio_util::io::ReaderStream;
 
-fn bad_request() -> Result<Response<Body>, Infallible> {
+fn bad_request() -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     Ok(Response::builder()
         .status(StatusCode::BAD_REQUEST)
-        .body(Body::empty())
+        .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap())
 }
 
-fn get_local_path(req: &Request<Body>) -> PathBuf {
+fn get_local_path(req: &Request<Incoming>) -> PathBuf {
     let mut path = req.uri().path();
     if path.len() > 0 {
         path = &path[1..];
@@ -31,7 +35,7 @@ fn get_local_path(req: &Request<Body>) -> PathBuf {
     env::current_dir().unwrap().join(path)
 }
 
-fn get_uri_path_parent(req: &Request<Body>) -> &str {
+fn get_uri_path_parent(req: &Request<Incoming>) -> &str {
     let path = req.uri().path();
     match path.rsplit_once("/") {
         Some(("", _right)) => "/",
@@ -40,7 +44,7 @@ fn get_uri_path_parent(req: &Request<Body>) -> &str {
     }
 }
 
-async fn is_local_dir(req: &Request<Body>) -> bool {
+async fn is_local_dir(req: &Request<Incoming>) -> bool {
     let path = get_local_path(&req);
     match tokio::fs::metadata(path).await {
         Ok(metadata) => metadata.is_dir(),
@@ -48,7 +52,7 @@ async fn is_local_dir(req: &Request<Body>) -> bool {
     }
 }
 
-async fn get_local_dir_html(req: &Request<Body>) -> String {
+async fn get_local_dir_html(req: &Request<Incoming>) -> String {
     let req_path = req.uri().path();
     let mut html = format!(
         "<!DOCTYPE html><html><head><title>{0}</title></head><body><ul><li><a href={1}>..</a></li>",
@@ -83,19 +87,23 @@ async fn get_local_dir_html(req: &Request<Body>) -> String {
     html
 }
 
-async fn handle_get_dir(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get_dir(
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     let html = get_local_dir_html(&req).await;
-    let body = Body::from(html);
-    Ok(Response::new(body))
+    let body = Full::from(html);
+    Ok(Response::new(body.map_err(|e| match e {}).boxed()))
 }
 
-async fn handle_get_file(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get_file(
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     let path = get_local_path(&req);
     match File::open(path).await {
         Ok(file) => {
-            let stream = FramedRead::new(file, BytesCodec::new());
-            let body = Body::wrap_stream(stream);
-            Ok(Response::new(body))
+            let stream = ReaderStream::new(file);
+            let body = StreamBody::new(stream.map_ok(Frame::data));
+            Ok(Response::new(body.boxed()))
         }
         _ => bad_request(),
     }
@@ -103,8 +111,8 @@ async fn handle_get_file(req: Request<Body>) -> Result<Response<Body>, Infallibl
 
 async fn handle_get(
     remote_addr: SocketAddr,
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     println!("{} {} {}", remote_addr, req.method(), req.uri().path());
 
     if is_local_dir(&req).await {
@@ -114,7 +122,10 @@ async fn handle_get(
     }
 }
 
-async fn handle(remote_addr: SocketAddr, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle(
+    remote_addr: SocketAddr,
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
     match req.method() {
         &Method::GET => handle_get(remote_addr, req).await,
         _ => bad_request(),
@@ -124,14 +135,13 @@ async fn handle(remote_addr: SocketAddr, req: Request<Body>) -> Result<Response<
 fn tls_acceptor() -> TlsAcceptor {
     // generate certificate and private key
     let cert = generate_simple_self_signed(Vec::new()).unwrap();
-    let key = PrivateKey(cert.serialize_private_key_der());
-    let cert = Certificate(cert.serialize_der().unwrap());
+    let key = PrivatePkcs8KeyDer::from(cert.serialize_private_key_der());
+    let cert = cert.serialize_der().unwrap();
 
     Arc::new(
         ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
-            .with_single_cert(vec![cert], key)
+            .with_single_cert(vec![cert.into()], key.into())
             .unwrap(),
     )
     .into()
@@ -139,30 +149,42 @@ fn tls_acceptor() -> TlsAcceptor {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // create listener
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let mut listener = TlsListener::new(tls_acceptor(), TcpListener::bind(addr).await?);
 
-    // create request handler that uses remote address
-    let make_service = make_service_fn(|conn: &tokio_rustls::server::TlsStream<AddrStream>| {
-        let remote_addr = conn.get_ref().0.remote_addr();
-        let service = service_fn(move |req| handle(remote_addr, req));
+    println!(
+        "Serving HTTP on {} port {} (https://{}/)...",
+        addr.ip(),
+        addr.port(),
+        addr
+    );
 
-        async move { Ok::<_, Infallible>(service) }
-    });
+    // main loop
+    loop {
+        // get connection from listener
+        let (stream, remote_addr) = match listener.accept().await {
+            Ok((stream, remote_addr)) => (stream, remote_addr),
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                continue;
+            }
+        };
+        let io = TokioIo::new(stream);
 
-    // create tls listener for the http server
-    let incoming = TlsListener::new(tls_acceptor(), AddrIncoming::bind(&addr)?).filter(|conn| {
-        if let Err(err) = conn {
-            eprintln!("Error: {:?}", err);
-            ready(false)
-        } else {
-            ready(true)
-        }
-    });
+        // set service function
+        let service = move |req: hyper::Request<hyper::body::Incoming>| async move {
+            handle(remote_addr, req).await
+        };
 
-    let server = Server::builder(accept::from_stream(incoming)).serve(make_service);
-
-    if let Err(e) = server.await {
-        eprintln!("server error: {}", e);
+        // handle connection
+        tokio::task::spawn(async move {
+            if let Err(err) = server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                .serve_connection(io, service_fn(service))
+                .await
+            {
+                eprintln!("server error: {}", err);
+            }
+        });
     }
-    Ok(())
 }
