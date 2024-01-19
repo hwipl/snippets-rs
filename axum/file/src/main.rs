@@ -10,56 +10,59 @@ use std::path::PathBuf;
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
+/// convert the request path to a local path name.
 fn get_local_path(path: &str) -> PathBuf {
-    let path = match path.len() {
-        0 => path,
-        _ => &path[1..],
-    };
-    env::current_dir().unwrap().join(path)
+    env::current_dir().unwrap().join(&path[1..])
 }
 
+/// get parent directory of request path.
 fn get_uri_path_parent(path: &str) -> &str {
-    match path.rsplit_once("/") {
+    match path[..path.len() - 1].rsplit_once("/") {
         Some(("", _right)) => "",
         Some((left, _right)) => left,
-        None => path,
+        None => "",
     }
 }
 
-async fn get_local_dir_html(req_path: &str) -> String {
+/// get local directory listing as html for request path.
+async fn get_local_dir_html(path: &str) -> String {
+    // create header and start directory listing with the ".." entry
     let mut html = format!(
         "<!DOCTYPE html><html><head><title>{0}</title></head><body><ul><li><a href={1}/>..</a></li>",
-        req_path,
-        get_uri_path_parent(req_path),
+        path,
+        get_uri_path_parent(path)
     );
-    let local_path = get_local_path(req_path);
+
+    // add content of directory to the directory listing
+    let local_path = get_local_path(path);
     if let Ok(mut entries) = tokio::fs::read_dir(local_path).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             if let Ok(filetype) = entry.file_type().await {
+                // skip symlinks
                 if filetype.is_symlink() {
                     continue;
                 }
+
+                // add trailing "/" to subdirectories
                 let is_dir = match filetype.is_dir() {
                     true => "/",
                     false => "",
                 };
+
+                // add entry to directory listing
                 if let Some(name) = entry.file_name().to_str() {
-                    let li = match req_path {
-                        "/" => format!("<li><a href=/{0}{1}>{0}{1}</a></li>", name, is_dir),
-                        _ => format!(
-                            "<li><a href={0}/{1}{2}>{1}{2}</a></li>",
-                            req_path, name, is_dir
-                        ),
-                    };
-                    html += &li;
+                    html += &format!("<li><a href={0}{1}{2}>{1}{2}</a></li>", path, name, is_dir);
                 }
             }
         }
     }
+
+    // close directory listing and other html tags
     html += "</ul></body></html>";
     html
 }
 
+/// return whether request path is a local directory.
 async fn is_local_dir(path: &str) -> bool {
     let path = get_local_path(path);
     match tokio::fs::metadata(path).await {
@@ -68,10 +71,35 @@ async fn is_local_dir(path: &str) -> bool {
     }
 }
 
+/// remove extra slashes from request path.
+fn remove_extra_slashes(path: &str) -> String {
+    let mut out = String::new();
+    let mut previous_slash = false;
+    for c in path.chars() {
+        if c == '/' {
+            if previous_slash {
+                // skip duplicate slashes
+                continue;
+            }
+
+            previous_slash = true;
+        } else {
+            previous_slash = false;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// fallback handler that returns a directory listing if client requested a local directory or
+/// otherwise returns a "not found" error.
 async fn fallback(request: Request) -> (StatusCode, Html<String>) {
-    let path = request.uri().path().trim_end_matches('/');
-    match is_local_dir(path).await {
-        true => (StatusCode::OK, get_local_dir_html(path).await.into()),
+    // get request path and remove extra slashes
+    let path = request.uri().path();
+    let path = remove_extra_slashes(path);
+
+    match is_local_dir(&path).await {
+        true => (StatusCode::OK, get_local_dir_html(&path).await.into()),
         false => (StatusCode::NOT_FOUND, String::from("Not found").into()),
     }
 }
