@@ -130,3 +130,50 @@ async fn main() {
     .await
     .unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_uri_path_parent() {
+        for (path, want) in vec![
+            // root dir
+            ("/", ""),
+            ("/1/", ""),
+            // not root dir
+            ("/1/2/", "/1"),
+            ("/1/2/3/", "/1/2"),
+            ("/1/2/3/4/", "/1/2/3"),
+        ] {
+            assert_eq!(get_uri_path_parent(path), want);
+        }
+    }
+
+    #[test]
+    fn test_remove_extra_slashes() {
+        for (path, want) in vec![
+            // regular paths
+            ("/", "/"),
+            ("/1/", "/1/"),
+            ("/1/2/", "/1/2/"),
+            ("/1/2/3/", "/1/2/3/"),
+            // paths starting with extra slashes
+            ("////////", "/"),
+            ("//////1/", "/1/"),
+            ("////1/2/", "/1/2/"),
+            ("//1/2/3/", "/1/2/3/"),
+            // paths ending with extra slashes
+            ("/1//////", "/1/"),
+            ("/1/2////", "/1/2/"),
+            ("/1/2/3//", "/1/2/3/"),
+            // paths with random extra slashes
+            ("/////1/////", "/1/"),
+            ("/1///////2/", "/1/2/"),
+            ("//1////2///", "/1/2/"),
+            ("//1//2//3//", "/1/2/3/"),
+        ] {
+            assert_eq!(remove_extra_slashes(path), want);
+        }
+    }
+}
