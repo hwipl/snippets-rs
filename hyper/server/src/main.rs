@@ -21,19 +21,44 @@ fn bad_request() -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible>
         .unwrap())
 }
 
+/// remove extra slashes from request path.
+fn remove_extra_slashes(path: &str) -> String {
+    let mut out = String::new();
+    let mut previous_slash = false;
+    for c in path.chars() {
+        if c == '/' {
+            if previous_slash {
+                // skip duplicate slashes
+                continue;
+            }
+
+            previous_slash = true;
+        } else {
+            previous_slash = false;
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn get_req_path(req: &Request<hyper::body::Incoming>) -> String {
+    remove_extra_slashes(req.uri().path())
+}
+
 fn get_local_path(req: &Request<hyper::body::Incoming>) -> PathBuf {
-    let mut path = req.uri().path();
+    let path = get_req_path(req);
+    let mut path = path.as_str();
     if path.len() > 0 {
         path = &path[1..];
     }
     env::current_dir().unwrap().join(path)
 }
 
-fn get_uri_path_parent(req: &Request<hyper::body::Incoming>) -> &str {
-    let path = req.uri().path();
+fn get_uri_path_parent(req: &Request<hyper::body::Incoming>) -> String {
+    let path = get_req_path(req);
     match path.rsplit_once("/") {
-        Some(("", _right)) => "/",
-        Some((left, _right)) => left,
+        Some(("", _right)) => "/".into(),
+        Some((left, _right)) => left.into(),
         None => path,
     }
 }
@@ -47,7 +72,7 @@ async fn is_local_dir(req: &Request<hyper::body::Incoming>) -> bool {
 }
 
 async fn get_local_dir_html(req: &Request<hyper::body::Incoming>) -> String {
-    let req_path = req.uri().path();
+    let req_path = get_req_path(req);
     let mut html = format!(
         "<!DOCTYPE html><html><head><title>{0}</title></head><body><ul><li><a href={1}>..</a></li>",
         req_path,
@@ -65,7 +90,7 @@ async fn get_local_dir_html(req: &Request<hyper::body::Incoming>) -> String {
                     false => "",
                 };
                 if let Some(name) = entry.file_name().to_str() {
-                    let li = match req_path {
+                    let li = match req_path.as_str() {
                         "/" => format!("<li><a href=/{0}>{0}{1}</a></li>", name, is_dir),
                         _ => format!(
                             "<li><a href={0}/{1}>{1}{2}</a></li>",
