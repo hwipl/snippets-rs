@@ -47,8 +47,9 @@ fn remove_extra_slashes(path: &str) -> String {
     out
 }
 
+/// get request path without extra slashes and without slash at the end.
 fn get_req_path(req: &Request<Incoming>) -> String {
-    remove_extra_slashes(req.uri().path())
+    remove_extra_slashes(req.uri().path().trim_end_matches('/'))
 }
 
 fn get_local_path(req: &Request<Incoming>) -> PathBuf {
@@ -63,9 +64,9 @@ fn get_local_path(req: &Request<Incoming>) -> PathBuf {
 fn get_uri_path_parent(req: &Request<Incoming>) -> String {
     let path = get_req_path(req);
     match path.rsplit_once("/") {
-        Some(("", _right)) => "/".into(),
+        Some(("", _right)) => "".into(),
         Some((left, _right)) => left.into(),
-        None => path,
+        None => "".into(),
     }
 }
 
@@ -80,7 +81,7 @@ async fn is_local_dir(req: &Request<Incoming>) -> bool {
 async fn get_local_dir_html(req: &Request<Incoming>) -> String {
     let req_path = get_req_path(req);
     let mut html = format!(
-        "<!DOCTYPE html><html><head><title>{0}</title></head><body><ul><li><a href={1}>..</a></li>",
+        "<!DOCTYPE html><html><head><title>{0}/</title></head><body><ul><li><a href={1}/>..</a></li>",
         req_path,
         get_uri_path_parent(&req),
     );
@@ -96,14 +97,10 @@ async fn get_local_dir_html(req: &Request<Incoming>) -> String {
                     false => "",
                 };
                 if let Some(name) = entry.file_name().to_str() {
-                    let li = match req_path.as_str() {
-                        "/" => format!("<li><a href=/{0}>{0}{1}</a></li>", name, is_dir),
-                        _ => format!(
-                            "<li><a href={0}/{1}>{1}{2}</a></li>",
-                            req_path, name, is_dir
-                        ),
-                    };
-                    html += &li;
+                    html += &format!(
+                        "<li><a href={0}/{1}{2}>{1}{2}</a></li>",
+                        req_path, name, is_dir
+                    );
                 }
             }
         }
