@@ -55,8 +55,7 @@ fn get_local_path(req: &Request<hyper::body::Incoming>) -> PathBuf {
     env::current_dir().unwrap().join(path)
 }
 
-fn get_uri_path_parent(req: &Request<hyper::body::Incoming>) -> String {
-    let path = get_req_path(req);
+fn get_uri_path_parent(path: &str) -> String {
     match path.rsplit_once("/") {
         Some(("", _right)) => "".into(),
         Some((left, _right)) => left.into(),
@@ -77,7 +76,7 @@ async fn get_local_dir_html(req: &Request<hyper::body::Incoming>) -> String {
     let mut html = format!(
         "<!DOCTYPE html><html><head><title>{0}/</title></head><body><ul><li><a href={1}/>..</a></li>",
         req_path,
-        get_uri_path_parent(&req),
+        get_uri_path_parent(&req_path),
     );
     let local_path = get_local_path(&req);
     if let Ok(mut entries) = tokio::fs::read_dir(local_path).await {
@@ -175,5 +174,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("server error: {}", err);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_uri_path_parent() {
+        for (path, want) in vec![
+            // root dir
+            ("/", ""),
+            ("/1", ""),
+            // not root dir
+            ("/1/2", "/1"),
+            ("/1/2/3", "/1/2"),
+            ("/1/2/3/4", "/1/2/3"),
+        ] {
+            assert_eq!(get_uri_path_parent(path), want);
+        }
+    }
+
+    #[test]
+    fn test_remove_extra_slashes() {
+        for (path, want) in vec![
+            // regular paths
+            ("/", "/"),
+            ("/1/", "/1/"),
+            ("/1/2/", "/1/2/"),
+            ("/1/2/3/", "/1/2/3/"),
+            // paths starting with extra slashes
+            ("////////", "/"),
+            ("//////1/", "/1/"),
+            ("////1/2/", "/1/2/"),
+            ("//1/2/3/", "/1/2/3/"),
+            // paths ending with extra slashes
+            ("/1//////", "/1/"),
+            ("/1/2////", "/1/2/"),
+            ("/1/2/3//", "/1/2/3/"),
+            // paths with random extra slashes
+            ("/////1/////", "/1/"),
+            ("/1///////2/", "/1/2/"),
+            ("//1////2///", "/1/2/"),
+            ("//1//2//3//", "/1/2/3/"),
+        ] {
+            assert_eq!(remove_extra_slashes(path), want);
+        }
     }
 }
