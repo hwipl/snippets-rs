@@ -8,8 +8,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // create certificate
     let cert = generate_simple_self_signed(subject_alt_names)?;
-    println!("{}", cert.serialize_pem()?);
-    println!("{}", cert.serialize_private_key_pem());
+    println!("{}", cert.cert.pem());
+    println!("{}", cert.key_pair.serialize_pem());
 
     Ok(())
 }
