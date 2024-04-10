@@ -6,7 +6,7 @@ use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use hyper_util::server;
-use rcgen::generate_simple_self_signed;
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use std::convert::Infallible;
 use std::env;
 use std::net::SocketAddr;
@@ -155,14 +155,14 @@ async fn handle(
 
 fn tls_acceptor() -> TlsAcceptor {
     // generate certificate and private key
-    let cert = generate_simple_self_signed(Vec::new()).unwrap();
-    let key = PrivatePkcs8KeyDer::from(cert.serialize_private_key_der());
-    let cert = cert.serialize_der().unwrap();
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(Vec::new()).unwrap();
+    let key = PrivatePkcs8KeyDer::from(key_pair.serialize_der());
+    let cert = cert.der().clone();
 
     Arc::new(
         ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(vec![cert.into()], key.into())
+            .with_single_cert(vec![cert], key.into())
             .unwrap(),
     )
     .into()
