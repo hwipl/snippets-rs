@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rustls-pemfile = "2.0.0"
+rustls-pemfile = "2.1.2"
