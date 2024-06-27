@@ -9,5 +9,5 @@ libp2p = { version = "0.53.2", features = ["async-std", "mdns", "tcp", "tls", "n
 futures = "0.3.30"
 futures-timer = "3.0.3"
 once_cell = "1.19.0"
-serde = { version = "1.0.200", features = ["derive"] }
+serde = { version = "1.0.203", features = ["derive"] }
 serde_cbor = "0.11.2"
