@@ -170,10 +170,7 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
         mdns::Event::Discovered(list) => {
             let mut new_peers: Vec<PeerId> = Vec::new();
             for (peer, addr) in list {
-                swarm
-                    .behaviour_mut()
-                    .request
-                    .add_address(&peer, addr.clone());
+                swarm.add_peer_address(peer, addr.clone());
                 if new_peers.contains(&peer) {
                     continue;
                 }
