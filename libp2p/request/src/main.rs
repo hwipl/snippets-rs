@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // send to peer id in second command line argument
         let peer_id = std::env::args().nth(2).ok_or("peer id missing")?;
         let peer_id: PeerId = peer_id.parse()?;
-        swarm.behaviour_mut().add_address(&peer_id, remote.clone());
+        swarm.add_peer_address(peer_id, remote.clone());
         swarm
             .behaviour_mut()
             .send_request(&peer_id, request.clone());
