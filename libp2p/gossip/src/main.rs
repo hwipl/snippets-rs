@@ -9,17 +9,14 @@ use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
-    let builder = block_on(
-        SwarmBuilder::with_new_identity()
-            .with_async_std()
-            .with_tcp(
-                Default::default(),
-                (libp2p::tls::Config::new, libp2p::noise::Config::new),
-                libp2p::yamux::Config::default,
-            )?
-            .with_dns(),
-    )?;
-    let mut swarm = builder
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_async_std()
+        .with_tcp(
+            Default::default(),
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )?
+        .with_dns()?
         .with_behaviour(|key| {
             // create gossipsub behaviour
             let message_authenticity = gossipsub::MessageAuthenticity::Signed(key.clone());
