@@ -73,22 +73,18 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
-    let builder = block_on(
-        SwarmBuilder::with_new_identity()
-            .with_async_std()
-            .with_tcp(
-                Default::default(),
-                (libp2p::tls::Config::new, libp2p::noise::Config::new),
-                libp2p::yamux::Config::default,
-            )?
-            .with_dns(),
-    )?;
-    let mut swarm = builder
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_async_std()
+        .with_tcp(
+            Default::default(),
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )?
+        .with_dns()?
         .with_behaviour(|key| {
             // create kademlia behaviour
             let store = MemoryStore::new(key.public().to_peer_id());
-            let mut config = kad::Config::default();
-            config.set_protocol_names(vec![StreamProtocol::new("/hello/world/0.1.0")]);
+            let config = kad::Config::new(StreamProtocol::new("/hello/world/0.1.0"));
             let behaviour = kad::Behaviour::with_config(key.public().to_peer_id(), store, config);
 
             Ok(behaviour)
