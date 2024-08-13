@@ -3,7 +3,7 @@
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{Endpoint, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
+use libp2p::core::{transport::PortUse, Endpoint, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use libp2p::swarm::handler::{
     ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
 };
@@ -105,6 +105,7 @@ impl NetworkBehaviour for HelloWorld {
         _: PeerId,
         _: &Multiaddr,
         _: Endpoint,
+        _: PortUse,
     ) -> Result<Self::ConnectionHandler, ConnectionDenied> {
         Ok(HelloWorldHandler::new())
     }
