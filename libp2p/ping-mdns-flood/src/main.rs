@@ -145,17 +145,14 @@ fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: mdns::Event) {
 
 fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
-    let builder = block_on(
-        SwarmBuilder::with_new_identity()
-            .with_async_std()
-            .with_tcp(
-                Default::default(),
-                (libp2p::tls::Config::new, libp2p::noise::Config::new),
-                libp2p::yamux::Config::default,
-            )?
-            .with_dns(),
-    )?;
-    let mut swarm = builder
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_async_std()
+        .with_tcp(
+            Default::default(),
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )?
+        .with_dns()?
         .with_behaviour(|key| {
             // create floodsub
             let mut floodsub = Floodsub::new(key.public().to_peer_id());
