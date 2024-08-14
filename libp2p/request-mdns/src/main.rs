@@ -205,17 +205,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .try_init();
 
     // create swarm
-    let builder = block_on(
-        SwarmBuilder::with_new_identity()
-            .with_async_std()
-            .with_tcp(
-                Default::default(),
-                (libp2p::tls::Config::new, libp2p::noise::Config::new),
-                libp2p::yamux::Config::default,
-            )?
-            .with_dns(),
-    )?;
-    let mut swarm = builder
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_async_std()
+        .with_tcp(
+            Default::default(),
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )?
+        .with_dns()?
         .with_behaviour(|key| {
             // create mdns
             let mdns = mdns::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
