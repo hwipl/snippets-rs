@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
-reqwest = "0.12.5"
+async-std = { version = "1.13.0", features = ["attributes", "tokio1"] }
+reqwest = "0.12.9"
