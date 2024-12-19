@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 libp2p = { version = "0.54.1", features = ["async-std", "tcp", "tls", "noise", "yamux", "dns", "macros", "request-response", "mdns"] }
-futures = "0.3.30"
-async-trait = "0.1.82"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+futures = "0.3.31"
+async-trait = "0.1.83"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
