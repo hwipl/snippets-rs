@@ -175,13 +175,7 @@ impl ConnectionHandler for HelloWorldHandler {
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<
-            '_,
-            Self::InboundProtocol,
-            Self::OutboundProtocol,
-            Self::InboundOpenInfo,
-            Self::OutboundOpenInfo,
-        >,
+        event: ConnectionEvent<'_, Self::InboundProtocol, Self::OutboundProtocol>,
     ) {
         match event {
             ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
