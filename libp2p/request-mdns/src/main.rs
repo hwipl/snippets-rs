@@ -133,7 +133,12 @@ fn handle_request_response_event(
     let response = HelloResponse("hi".to_string().into_bytes());
 
     // handle incoming messages
-    if let request_response::Event::Message { peer, message } = event {
+    if let request_response::Event::Message {
+        peer,
+        connection_id: _,
+        message,
+    } = event
+    {
         match message {
             // handle incoming request message, send back response
             request_response::Message::Request { channel, .. } => {
