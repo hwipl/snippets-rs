@@ -145,6 +145,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // handle incoming request message, send back response
                 SwarmEvent::Behaviour(Event::Message {
                     peer,
+                    connection_id: _,
                     message:
                         Message::Request {
                             request, channel, ..
@@ -160,6 +161,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // handle incoming response message, stop
                 SwarmEvent::Behaviour(Event::Message {
                     peer,
+                    connection_id: _,
                     message: Message::Response { response, .. },
                 }) => {
                     println!("received response {:?} from {:?}", response, peer);
