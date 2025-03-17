@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // load certificates
     let mut roots = rustls::RootCertStore::empty();
-    for cert in rustls_native_certs::load_native_certs()? {
+    for cert in rustls_native_certs::load_native_certs().certs {
         roots.add(cert)?;
     }
 
