@@ -1,16 +1,15 @@
-use futures::executor::block_on;
-use futures::prelude::*;
-use libp2p::swarm::{Swarm, SwarmEvent};
+use futures::StreamExt;
+use libp2p::swarm::SwarmEvent;
 use libp2p::Multiaddr;
 use libp2p::{gossipsub, SwarmBuilder};
 use std::error::Error;
-use std::task::Poll;
 use std::time::Duration;
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -45,46 +44,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // start main loop
-    let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => match event {
-                SwarmEvent::Behaviour(gossipsub::Event::Message { message, .. }) => {
-                    println!(
-                        "Got message from {:?} to {:?}: {:?}",
-                        message.source,
-                        message.topic,
-                        String::from_utf8_lossy(&message.data)
-                    );
-                }
-                SwarmEvent::Behaviour(gossipsub::Event::Subscribed {
-                    peer_id: _peer_id,
-                    topic: _t,
-                }) => {
-                    // println!("Subscribed: {:?} {:?}", peer_id, t);
-                    // swarm.behaviour_mut().add_explicit_peer(&peer_id);
-                    swarm
-                        .behaviour_mut()
-                        .publish(topic.clone(), b"hi".to_vec())
-                        .unwrap();
-                }
-                SwarmEvent::Behaviour(gossipsub::Event::Unsubscribed { .. }) => {
-                    // println!("Unsubscribed");
-                }
-                _ => (),
-            },
-            Poll::Ready(None) => return Poll::Ready(()),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {}", addr);
-                        listening = true;
-                    }
-                }
-                return Poll::Pending;
+    loop {
+        match swarm.select_next_some().await {
+            SwarmEvent::Behaviour(gossipsub::Event::Message { message, .. }) => {
+                println!(
+                    "Got message from {:?} to {:?}: {:?}",
+                    message.source,
+                    message.topic,
+                    String::from_utf8_lossy(&message.data)
+                );
             }
+            SwarmEvent::Behaviour(gossipsub::Event::Subscribed {
+                peer_id: _peer_id,
+                topic: _t,
+            }) => {
+                // println!("Subscribed: {:?} {:?}", peer_id, t);
+                // swarm.behaviour_mut().add_explicit_peer(&peer_id);
+                swarm
+                    .behaviour_mut()
+                    .publish(topic.clone(), b"hi".to_vec())
+                    .unwrap();
+            }
+            SwarmEvent::Behaviour(gossipsub::Event::Unsubscribed { .. }) => {
+                // println!("Unsubscribed");
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Listening on {address}")
+            }
+            _ => (),
         }
-    }));
-
-    Ok(())
+    }
 }
