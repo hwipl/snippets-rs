@@ -1,4 +1,4 @@
-use futures::{executor::block_on, StreamExt};
+use futures::StreamExt;
 use libp2p::core::ConnectedPoint;
 use libp2p::kad::{
     self, store::MemoryStore, GetRecordOk::FoundRecord, PeerRecord, QueryResult, Quorum, Record,
@@ -71,10 +71,11 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -128,7 +129,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // start main loop
-    block_on(handle_events(&mut swarm));
+    handle_events(&mut swarm).await;
 
     Ok(())
 }
