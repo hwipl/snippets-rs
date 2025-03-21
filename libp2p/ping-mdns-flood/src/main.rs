@@ -1,7 +1,6 @@
 // simple ping program using mdns and floodsub based on rust-libp2p examples
 
-use futures::executor::block_on;
-use futures::prelude::*;
+use futures::StreamExt;
 use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
@@ -9,8 +8,8 @@ use libp2p::{mdns, PeerId, SwarmBuilder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::task::Poll;
 use std::time::Duration;
+use tokio::select;
 
 // floodsub topic
 static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
@@ -56,7 +55,7 @@ impl PingMessage {
 #[behaviour(to_swarm = "PingBehaviourEvent")]
 struct PingBehaviour {
     floodsub: Floodsub,
-    mdns: mdns::async_io::Behaviour,
+    mdns: mdns::tokio::Behaviour,
 }
 
 #[derive(Debug)]
@@ -143,10 +142,11 @@ fn handle_mdns_event(swarm: &mut Swarm<PingBehaviour>, event: mdns::Event) {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -176,53 +176,34 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // start main loop
     let mut timer = Delay::new(Duration::new(5, 0));
-    block_on(future::poll_fn(move |cx| {
-        loop {
-            // handle swarm events
-            let mut swarm_pending = false;
-            match swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(event)) => {
-                    match event {
-                        // Floodsub event
-                        SwarmEvent::Behaviour(PingBehaviourEvent::Floodsub(event)) => {
-                            handle_floodsub_event(&mut swarm, event);
-                        }
-
-                        // Mdns event
-                        SwarmEvent::Behaviour(PingBehaviourEvent::Mdns(event)) => {
-                            handle_mdns_event(&mut swarm, event)
-                        }
-
-                        event => println!("{:?}", event),
-                    }
-                }
-                Poll::Ready(None) => {
-                    return Poll::Ready(Ok(()));
-                }
-                Poll::Pending => {
-                    swarm_pending = true;
-                }
-            }
-
+    loop {
+        select! {
             // handle timer events
-            match timer.poll_unpin(cx) {
-                Poll::Pending => {
-                    if swarm_pending {
-                        return Poll::Pending;
-                    }
-                }
-                Poll::Ready(()) => {
-                    // publish message
-                    println!("Sending ping");
-                    swarm
-                        .behaviour_mut()
-                        .floodsub
-                        .publish(TOPIC.clone(), PingMessage::ping());
+            _ = &mut timer => {
+                // publish message
+                println!("Sending ping");
+                swarm
+                    .behaviour_mut()
+                    .floodsub
+                    .publish(TOPIC.clone(), PingMessage::ping());
 
-                    // reset timer
-                    timer.reset(Duration::new(5, 0));
+                // reset timer
+                timer.reset(Duration::new(5, 0));
+            }
+            // handle swarm events
+            event = swarm.select_next_some() => match event {
+                // Floodsub event
+                SwarmEvent::Behaviour(PingBehaviourEvent::Floodsub(event)) => {
+                    handle_floodsub_event(&mut swarm, event);
                 }
+
+                // Mdns event
+                SwarmEvent::Behaviour(PingBehaviourEvent::Mdns(event)) => {
+                    handle_mdns_event(&mut swarm, event)
+                }
+
+                event => println!("{:?}", event),
             }
         }
-    }))
+    }
 }
