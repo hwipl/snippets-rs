@@ -2,18 +2,17 @@
 
 mod protocol;
 
-use futures::executor::block_on;
-use futures::prelude::*;
-use libp2p::{Multiaddr, Swarm, SwarmBuilder};
+use futures::StreamExt;
+use libp2p::{swarm::SwarmEvent, Multiaddr, SwarmBuilder};
 use std::error::Error;
-use std::task::Poll;
 
 use protocol::*;
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -39,22 +38,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // start main loop
-    let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => println!("{:?}", event),
-            Poll::Ready(None) => return Poll::Ready(()),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {}", addr);
-                        listening = true;
-                    }
-                }
-                return Poll::Pending;
+    loop {
+        match swarm.select_next_some().await {
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Listening on {address}")
             }
+            event => println!("{:?}", event),
         }
-    }));
-
-    Ok(())
+    }
 }
