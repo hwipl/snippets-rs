@@ -1,15 +1,14 @@
 // simple ping program using mdns and floodsub based on rust-libp2p examples
 
 use futures::StreamExt;
-use futures_timer::Delay;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{mdns, PeerId, SwarmBuilder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::time::Duration;
 use tokio::select;
+use tokio::time::{self, Duration, Instant};
 
 // floodsub topic
 static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
@@ -175,7 +174,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
 
     // start main loop
-    let mut timer = Delay::new(Duration::new(5, 0));
+    let timer = time::sleep(Duration::new(5, 0));
+    tokio::pin!(timer);
     loop {
         select! {
             // handle timer events
@@ -188,7 +188,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .publish(TOPIC.clone(), PingMessage::ping());
 
                 // reset timer
-                timer.reset(Duration::new(5, 0));
+                timer.as_mut().reset(Instant::now() + Duration::new(5,0));
             }
             // handle swarm events
             event = swarm.select_next_some() => match event {
