@@ -2077,7 +2077,6 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "libp2p",
- "once_cell",
  "serde",
  "serde_cbor",
  "tokio",

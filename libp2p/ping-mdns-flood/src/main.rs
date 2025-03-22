@@ -4,14 +4,14 @@ use futures::StreamExt;
 use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{mdns, PeerId, SwarmBuilder};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::sync::LazyLock;
 use tokio::select;
 use tokio::time::{self, Duration, Instant};
 
 // floodsub topic
-static TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("/hello/world"));
+static TOPIC: LazyLock<Topic> = LazyLock::new(|| Topic::new("/hello/world"));
 
 // ping message
 #[derive(Debug, Serialize, Deserialize)]
