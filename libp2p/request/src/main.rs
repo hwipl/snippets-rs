@@ -1,13 +1,11 @@
 // simple request response program based on libp2p request and response ping test
 
 use async_trait::async_trait;
-use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
-use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::swarm::SwarmEvent;
 use libp2p::{Multiaddr, PeerId, SwarmBuilder};
 use std::error::Error;
-use std::task::Poll;
 use std::time::Duration;
 use std::{io, iter};
 
@@ -93,10 +91,11 @@ struct HelloRequest(Vec<u8>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HelloResponse(Vec<u8>);
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -138,61 +137,51 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // start main loop
-    let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => match event {
-                // handle incoming request message, send back response
-                SwarmEvent::Behaviour(Event::Message {
-                    peer,
-                    connection_id: _,
-                    message:
-                        Message::Request {
-                            request, channel, ..
-                        },
-                }) => {
-                    println!("received request {:?} from {:?}", request, peer);
-                    swarm
-                        .behaviour_mut()
-                        .send_response(channel, response.clone())
-                        .unwrap();
-                }
-
-                // handle incoming response message, stop
-                SwarmEvent::Behaviour(Event::Message {
-                    peer,
-                    connection_id: _,
-                    message: Message::Response { response, .. },
-                }) => {
-                    println!("received response {:?} from {:?}", response, peer);
-                    return Poll::Ready(());
-                }
-
-                // handle response sent event
-                SwarmEvent::Behaviour(Event::ResponseSent { peer, .. }) => {
-                    println!("sent response {:?} to {:?}", response, peer);
-                }
-
-                // handle errors
-                SwarmEvent::Behaviour(e) => {
-                    println!("error: {:?}", e);
-                }
-
-                // ignore other events
-                _ => (),
-            },
-            Poll::Ready(None) => return Poll::Ready(()),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {}", addr);
-                        listening = true;
-                    }
-                }
-                return Poll::Pending;
+    loop {
+        match swarm.select_next_some().await {
+            // handle incoming request message, send back response
+            SwarmEvent::Behaviour(Event::Message {
+                peer,
+                connection_id: _,
+                message:
+                    Message::Request {
+                        request, channel, ..
+                    },
+            }) => {
+                println!("received request {:?} from {:?}", request, peer);
+                swarm
+                    .behaviour_mut()
+                    .send_response(channel, response.clone())
+                    .unwrap();
             }
-        }
-    }));
 
-    Ok(())
+            // handle incoming response message, stop
+            SwarmEvent::Behaviour(Event::Message {
+                peer,
+                connection_id: _,
+                message: Message::Response { response, .. },
+            }) => {
+                println!("received response {:?} from {:?}", response, peer);
+                return Ok(());
+            }
+
+            // handle response sent event
+            SwarmEvent::Behaviour(Event::ResponseSent { peer, .. }) => {
+                println!("sent response {:?} to {:?}", response, peer);
+            }
+
+            // handle errors
+            SwarmEvent::Behaviour(e) => {
+                println!("error: {:?}", e);
+            }
+
+            // handle new listen address
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Listening on {}", address);
+            }
+
+            // ignore other events
+            _ => (),
+        }
+    }
 }
