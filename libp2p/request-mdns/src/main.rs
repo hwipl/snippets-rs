@@ -1,14 +1,12 @@
 // simple request response program with mdns discovery
 
 use async_trait::async_trait;
-use futures::executor::block_on;
 use futures::prelude::*;
 use libp2p::mdns;
 use libp2p::request_response;
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
 use libp2p::{PeerId, SwarmBuilder};
 use std::error::Error;
-use std::task::Poll;
 use std::time::Duration;
 use std::{io, iter};
 use tracing_subscriber::EnvFilter;
@@ -102,7 +100,7 @@ struct HelloResponse(Vec<u8>);
 #[behaviour(to_swarm = "HelloBehaviourEvent")]
 struct HelloBehaviour {
     request: request_response::Behaviour<HelloCodec>,
-    mdns: mdns::async_io::Behaviour,
+    mdns: mdns::tokio::Behaviour,
 }
 
 #[derive(Debug)]
@@ -204,14 +202,15 @@ fn handle_mdns_event(swarm: &mut Swarm<HelloBehaviour>, event: mdns::Event) {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
     // create swarm
     let mut swarm = SwarmBuilder::with_new_identity()
-        .with_async_std()
+        .with_tokio()
         .with_tcp(
             Default::default(),
             (libp2p::tls::Config::new, libp2p::noise::Config::new),
@@ -239,35 +238,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     // start main loop
-    let mut listening = false;
-    block_on(future::poll_fn(move |cx| loop {
-        match swarm.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => match event {
-                // RequestResponse event
-                SwarmEvent::Behaviour(HelloBehaviourEvent::RequestResponse(event)) => {
-                    handle_request_response_event(&mut swarm, event);
-                }
-
-                // Mdns event
-                SwarmEvent::Behaviour(HelloBehaviourEvent::Mdns(event)) => {
-                    handle_mdns_event(&mut swarm, event);
-                }
-
-                // other event
-                event => println!("event: {:?}", event),
-            },
-            Poll::Ready(None) => return Poll::Ready(()),
-            Poll::Pending => {
-                if !listening {
-                    for addr in Swarm::listeners(&swarm) {
-                        println!("Listening on {}", addr);
-                        listening = true;
-                    }
-                }
-                return Poll::Pending;
+    loop {
+        match swarm.select_next_some().await {
+            // RequestResponse event
+            SwarmEvent::Behaviour(HelloBehaviourEvent::RequestResponse(event)) => {
+                handle_request_response_event(&mut swarm, event);
             }
-        }
-    }));
 
-    Ok(())
+            // Mdns event
+            SwarmEvent::Behaviour(HelloBehaviourEvent::Mdns(event)) => {
+                handle_mdns_event(&mut swarm, event);
+            }
+
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Listening on {}", address);
+            }
+            // other event
+            event => println!("event: {:?}", event),
+        }
+    }
 }
