@@ -25,9 +25,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/", get(index))
         .route("/hi", get(hi))
-        .route("/hi/:name", get(hi_name))
+        .route("/hi/{name}", get(hi_name))
         .route("/bye", get(bye))
-        .route("/bye/:name", get(bye_name));
+        .route("/bye/{name}", get(bye_name));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
     axum::serve(listener, app).await?;
