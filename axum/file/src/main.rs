@@ -122,7 +122,7 @@ async fn main() {
     };
 
     // create app and start server
-    let app = Router::new().nest_service("/", get(serve_dir));
+    let app = Router::new().fallback_service(get(serve_dir));
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
