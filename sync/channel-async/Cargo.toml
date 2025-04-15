@@ -5,5 +5,5 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-futures = "0.3.26"
-async-std = "1.12.0"
+futures = "0.3.31"
+async-std = "1.13.1"
