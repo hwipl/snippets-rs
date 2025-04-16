@@ -5,4 +5,4 @@ authors = ["hwipl"]
 edition = "2021"
 
 [dependencies]
-whoami = "1.5.1"
+whoami = "1.6.0"
