@@ -1,4 +1,4 @@
-use zbus::{dbus_interface, Connection, Result};
+use zbus::{interface, Connection, Result};
 
 const PATH: &str = "/org/ping/Ping";
 const IFACE: &str = "org.ping.Ping";
@@ -6,7 +6,7 @@ const IFACE: &str = "org.ping.Ping";
 // define ping interface
 struct Ping;
 
-#[dbus_interface(name = "org.ping.Ping")]
+#[interface(name = "org.ping.Ping")]
 impl Ping {
     async fn ping(&self) -> String {
         println!("PING");
