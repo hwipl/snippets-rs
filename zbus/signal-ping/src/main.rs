@@ -1,19 +1,19 @@
 use async_std::task;
 use futures_util::stream::StreamExt;
 use std::time::Duration;
-use zbus::{dbus_proxy, Connection, Result};
+use zbus::{proxy, Connection, Result};
 
 const NAME: &str = IFACE;
 const PATH: &str = "/org/ping/Ping";
 const IFACE: &str = "org.ping.Ping";
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.ping.Ping",
     interface = "org.ping.Ping",
     default_path = "/org/ping/Ping"
 )]
 trait Ping {
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn ping(&self, ping: &str) -> Result<()>;
 }
 
