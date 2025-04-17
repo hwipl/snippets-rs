@@ -1,6 +1,6 @@
 use async_std::task;
 use std::time::Duration;
-use zbus::{dbus_interface, Connection, MessageHeader, ObjectServer, Result, SignalContext};
+use zbus::{interface, object_server::SignalEmitter, Connection, Result};
 
 const NAME: &str = IFACE;
 const PATH: &str = "/org/world/Hello";
@@ -9,16 +9,13 @@ const IFACE: &str = "org.world.Hello";
 // set hello interface
 struct Hello {}
 
-#[dbus_interface(name = "org.world.Hello")]
+#[interface(name = "org.world.Hello")]
 impl Hello {
-    #[dbus_interface(signal)]
-    async fn hello(signal_ctxt: &SignalContext<'_>, ping: &str) -> Result<()>;
+    #[zbus(signal)]
+    async fn hello(emitter: &SignalEmitter<'_>, ping: &str) -> Result<()>;
 
     async fn hi(
         &self,
-        #[zbus(header)] _hdr: MessageHeader<'_>,
-        #[zbus(signal_context)] _ctxt: SignalContext<'_>,
-        #[zbus(object_server)] _server: &ObjectServer,
         name: &str,
     ) -> zbus::fdo::Result<String> {
         // send back greeting
@@ -40,6 +37,6 @@ async fn main() -> Result<()> {
     // handle method calls in the background
     loop {
         task::sleep(Duration::from_secs(5)).await;
-        Hello::hello(&SignalContext::new(&conn, PATH)?, "Hello, world!").await?;
+        Hello::hello(&SignalEmitter::new(&conn, PATH)?, "Hello, world!").await?;
     }
 }
