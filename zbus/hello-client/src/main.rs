@@ -1,14 +1,14 @@
 use futures_util::stream::StreamExt;
 use std::env;
-use zbus::{dbus_proxy, Connection, Result};
+use zbus::{proxy, Connection, Result};
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.world.Hello",
     interface = "org.world.Hello",
     default_path = "/org/world/Hello"
 )]
 trait Hello {
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn hello(&self, msg: &str) -> Result<()>;
 
     fn hi(&self, name: &str) -> Result<String>;
