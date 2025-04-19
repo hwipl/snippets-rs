@@ -2,7 +2,7 @@
 name = "ping"
 version = "0.1.0"
 authors = ["hwipl"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 libp2p = { version = "0.55.0", features = ["tokio", "tcp", "tls", "dns", "noise", "yamux", "ping"] }
