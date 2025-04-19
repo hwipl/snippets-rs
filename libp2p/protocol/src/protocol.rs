@@ -123,11 +123,11 @@ impl NetworkBehaviour for HelloWorld {
     fn on_swarm_event(&mut self, _event: FromSwarm) {}
 
     fn poll(&mut self, _: &mut Context<'_>) -> Poll<ToSwarm<HelloWorldEvent, Void>> {
-        if let Some(e) = self.events.pop_back() {
+        match self.events.pop_back() { Some(e) => {
             Poll::Ready(ToSwarm::GenerateEvent(e))
-        } else {
+        } _ => {
             Poll::Pending
-        }
+        }}
     }
 }
 
