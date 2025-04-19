@@ -9,4 +9,4 @@ libp2p = { version = "0.55.0", features = ["tokio", "mdns", "tcp", "tls", "noise
 futures = "0.3.31"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_cbor = "0.11.2"
-tokio = "1.44.1"
+tokio = "1.44.2"
