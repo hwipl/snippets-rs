@@ -5,8 +5,8 @@ authors = ["hwipl"]
 edition = "2024"
 
 [dependencies]
-libp2p = { version = "0.55.0", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
+libp2p = { version = "0.56.0", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
 futures = "0.3.31"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_cbor = "0.11.2"
-tokio = "1.44.2"
+tokio = "1.45.1"
