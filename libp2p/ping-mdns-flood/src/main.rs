@@ -1,9 +1,8 @@
 // simple ping program using mdns and floodsub based on rust-libp2p examples
 
 use futures::StreamExt;
-use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
 use libp2p::swarm::{NetworkBehaviour, Swarm, SwarmEvent};
-use libp2p::{mdns, PeerId, SwarmBuilder};
+use libp2p::{floodsub, mdns, PeerId, SwarmBuilder};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::LazyLock;
@@ -11,7 +10,7 @@ use tokio::select;
 use tokio::time::{self, Duration, Instant};
 
 // floodsub topic
-static TOPIC: LazyLock<Topic> = LazyLock::new(|| Topic::new("/hello/world"));
+static TOPIC: LazyLock<floodsub::Topic> = LazyLock::new(|| floodsub::Topic::new("/hello/world"));
 
 // ping message
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,18 +52,18 @@ impl PingMessage {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "PingBehaviourEvent")]
 struct PingBehaviour {
-    floodsub: Floodsub,
+    floodsub: floodsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
 }
 
 #[derive(Debug)]
 enum PingBehaviourEvent {
-    Floodsub(FloodsubEvent),
+    Floodsub(floodsub::Event),
     Mdns(mdns::Event),
 }
 
-impl From<FloodsubEvent> for PingBehaviourEvent {
-    fn from(event: FloodsubEvent) -> Self {
+impl From<floodsub::Event> for PingBehaviourEvent {
+    fn from(event: floodsub::Event) -> Self {
         PingBehaviourEvent::Floodsub(event)
     }
 }
@@ -76,8 +75,8 @@ impl From<mdns::Event> for PingBehaviourEvent {
 }
 
 /// handle floodsub event
-fn handle_floodsub_event(swarm: &mut Swarm<PingBehaviour>, event: FloodsubEvent) {
-    if let FloodsubEvent::Message(message) = event {
+fn handle_floodsub_event(swarm: &mut Swarm<PingBehaviour>, event: floodsub::Event) {
+    if let floodsub::Event::Message(message) = event {
         // parse ping message
         let msg = match PingMessage::parse(&message.data) {
             Ok(ping) => ping,
@@ -154,7 +153,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_dns()?
         .with_behaviour(|key| {
             // create floodsub
-            let mut floodsub = Floodsub::new(key.public().to_peer_id());
+            let mut floodsub = floodsub::Behaviour::new(key.public().to_peer_id());
 
             // subscribe to floodsub topic
             floodsub.subscribe(TOPIC.clone());
