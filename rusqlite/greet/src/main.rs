@@ -66,6 +66,15 @@ fn delete_all(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn print_usage() {
+    print! {"Usage:
+  run                       run some test commands
+  list                      list greetings
+  id <id>                   get greeting by id
+  greeting <greeting>       get greeting
+"}
+}
+
 fn main() -> Result<()> {
     // open in memory db
     let conn = Connection::open_in_memory()?;
@@ -79,7 +88,7 @@ fn main() -> Result<()> {
         (),
     )?;
 
-    // insert a greeting
+    // insert greetings
     let greetings = vec![
         Greeting {
             id: 0,
@@ -98,20 +107,45 @@ fn main() -> Result<()> {
         insert(&conn, g)?;
     }
 
-    // list
-    list(&conn)?;
+    // command line arguments
+    match std::env::args().nth(1).as_deref() {
+        Some("run") => {
+            // list
+            list(&conn)?;
 
-    // get id
-    get_id(&conn, 1)?;
+            // get id
+            get_id(&conn, 1)?;
 
-    // get greeting
-    get_greeting(&conn, "hi".to_string())?;
+            // get greeting
+            get_greeting(&conn, "hi".to_string())?;
 
-    // delete all
-    delete_all(&conn)?;
+            // delete all
+            delete_all(&conn)?;
 
-    // list
-    list(&conn)?;
+            // list
+            list(&conn)?;
+        }
+        Some("list") => {
+            list(&conn)?;
+        }
+        Some("id") => {
+            if let Some(s) = std::env::args().nth(2)
+                && let Ok(id) = s.parse::<i32>()
+            {
+                get_id(&conn, id)?;
+            } else {
+                print_usage()
+            }
+        }
+        Some("greeting") => {
+            if let Some(greeting) = std::env::args().nth(2) {
+                get_greeting(&conn, greeting)?;
+            } else {
+                print_usage()
+            }
+        }
+        _ => print_usage(),
+    }
 
     Ok(())
 }
