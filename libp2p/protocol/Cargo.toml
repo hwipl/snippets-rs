@@ -9,5 +9,5 @@ libp2p = { version = "0.56.0", features = ["tokio", "tcp", "tls", "noise", "yamu
 futures = "0.3.31"
 void = "1.0.2"
 futures-timer = "3.0.3"
-log = "0.4.27"
+log = "0.4.28"
 tokio = "1.47.1"
