@@ -1,5 +1,5 @@
 [package]
-name = "unix-async"
+name = "unix-async-std"
 version = "0.1.0"
 authors = ["hwipl"]
 edition = "2024"
