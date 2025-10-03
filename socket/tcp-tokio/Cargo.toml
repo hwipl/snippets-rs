@@ -1,5 +1,5 @@
 [package]
-name = "tcp-async"
+name = "tcp-tokio"
 version = "0.1.0"
 edition = "2024"
 
