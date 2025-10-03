@@ -30,7 +30,7 @@ fn run_client() -> std::io::Result<()> {
     ))?;
     let mut stream = TcpStream::connect(addr)?;
 
-    // sent request
+    // send request
     let request = b"hello world";
     stream.write_all(request)?;
     println!(

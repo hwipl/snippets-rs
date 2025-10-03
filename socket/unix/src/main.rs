@@ -31,7 +31,7 @@ fn run_server() -> std::io::Result<()> {
 fn run_client() -> std::io::Result<()> {
     let mut stream = UnixStream::connect("sockfile.sock")?;
 
-    // sent request
+    // send request
     let request = b"hello world";
     stream.write_all(request)?;
     println!(

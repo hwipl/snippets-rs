@@ -20,7 +20,7 @@ fn run_client() -> std::io::Result<()> {
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
     socket.connect(addr)?;
 
-    // sent request
+    // send request
     let request = b"hello world";
     socket.send(request)?;
     println!(

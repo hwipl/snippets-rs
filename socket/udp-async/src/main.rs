@@ -20,7 +20,7 @@ async fn run_client() -> std::io::Result<()> {
     let socket = UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0)).await?;
     socket.connect(addr).await?;
 
-    // sent request
+    // send request
     let request = b"hello world";
     socket.send(request).await?;
     println!(

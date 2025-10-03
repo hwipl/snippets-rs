@@ -24,7 +24,7 @@ async fn run_server() -> async_std::io::Result<()> {
 async fn run_client() -> async_std::io::Result<()> {
     let mut stream = UnixStream::connect("sockfile.sock").await?;
 
-    // sent request
+    // send request
     let request = b"hello world";
     stream.write_all(request).await?;
     println!(
