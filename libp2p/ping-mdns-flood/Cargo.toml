@@ -7,6 +7,6 @@ edition = "2024"
 [dependencies]
 libp2p = { version = "0.56.0", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
 futures = "0.3.31"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_cbor = "0.11.2"
-tokio = "1.47.1"
+tokio = "1.49.0"
