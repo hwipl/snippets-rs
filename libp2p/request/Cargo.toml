@@ -8,4 +8,4 @@ edition = "2024"
 libp2p = { version = "0.56.0", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "request-response"] }
 futures = "0.3.31"
 async-trait = "0.1.89"
-tokio = "1.47.1"
+tokio = "1.49.0"
