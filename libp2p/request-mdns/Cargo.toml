@@ -8,6 +8,6 @@ edition = "2024"
 libp2p = { version = "0.56.0", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "macros", "request-response", "mdns"] }
 futures = "0.3.31"
 async-trait = "0.1.89"
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-tokio = "1.47.1"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tokio = "1.49.0"
