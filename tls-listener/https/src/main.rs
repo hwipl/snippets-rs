@@ -155,8 +155,8 @@ async fn handle(
 
 fn tls_acceptor() -> TlsAcceptor {
     // generate certificate and private key
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(Vec::new()).unwrap();
-    let key = PrivatePkcs8KeyDer::from(key_pair.serialize_der());
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(Vec::new()).unwrap();
+    let key = PrivatePkcs8KeyDer::from(signing_key.serialize_der());
     let cert = cert.der().clone();
 
     Arc::new(
