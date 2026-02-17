@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::LazyLock;
 use tokio::select;
-use tokio::time::{self, Duration, Instant};
+use tokio::time::{self, Duration};
 
 // floodsub topic
 static TOPIC: LazyLock<floodsub::Topic> = LazyLock::new(|| floodsub::Topic::new("/hello/world"));
@@ -173,21 +173,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     swarm.listen_on("/ip6/::/tcp/0".parse()?)?;
 
     // start main loop
-    let timer = time::sleep(Duration::new(5, 0));
-    tokio::pin!(timer);
+    let mut timer = time::interval(Duration::from_secs(5));
+    timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     loop {
         select! {
             // handle timer events
-            _ = &mut timer => {
+            _ =  timer.tick() => {
                 // publish message
                 println!("Sending ping");
                 swarm
                     .behaviour_mut()
                     .floodsub
                     .publish(TOPIC.clone(), PingMessage::ping());
-
-                // reset timer
-                timer.as_mut().reset(Instant::now() + Duration::new(5,0));
             }
             // handle swarm events
             event = swarm.select_next_some() => match event {
