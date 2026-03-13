@@ -7,8 +7,8 @@ edition = "2024"
 [dependencies]
 # use current git version dated 2026-01-07 to remove lru dependency for dependabot alert
 libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "5e3519fb66b92c7f7c0dc744ab360fd8b669fe54", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns"] }
-futures = "0.3.31"
+futures = "0.3.32"
 void = "1.0.2"
 futures-timer = "3.0.3"
 log = "0.4.29"
-tokio = "1.49.0"
+tokio = "1.50.0"
