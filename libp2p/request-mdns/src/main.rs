@@ -1,6 +1,5 @@
 // simple request response program with mdns discovery
 
-use async_trait::async_trait;
 use futures::prelude::*;
 use libp2p::mdns;
 use libp2p::request_response;
@@ -25,7 +24,6 @@ impl AsRef<str> for HelloProtocol {
 #[derive(Clone, Default)]
 struct HelloCodec();
 
-#[async_trait]
 impl request_response::Codec for HelloCodec {
     type Protocol = HelloProtocol;
     type Request = HelloRequest;
