@@ -1,6 +1,5 @@
 // simple request response program based on libp2p request and response ping test
 
-use async_trait::async_trait;
 use futures::prelude::*;
 use libp2p::request_response::{Behaviour, Codec, Config, Event, Message, ProtocolSupport};
 use libp2p::swarm::SwarmEvent;
@@ -23,7 +22,6 @@ impl AsRef<str> for HelloProtocol {
 #[derive(Clone, Default)]
 struct HelloCodec();
 
-#[async_trait]
 impl Codec for HelloCodec {
     type Protocol = HelloProtocol;
     type Request = HelloRequest;
