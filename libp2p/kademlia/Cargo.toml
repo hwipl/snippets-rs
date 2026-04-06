@@ -5,7 +5,7 @@ authors = ["hwipl"]
 edition = "2024"
 
 [dependencies]
-# use current git version dated 2026-01-07 to remove lru dependency for dependabot alert
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "5e3519fb66b92c7f7c0dc744ab360fd8b669fe54", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "kad"] }
+# use current git version for dependency updates, dependabot fixes
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "3f88b309776d772b87d66c389d552db793276717", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "kad"] }
 futures = "0.3.32"
-tokio = "1.50.0"
+tokio = "1.51.0"
