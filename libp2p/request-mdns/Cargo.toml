@@ -10,4 +10,4 @@ libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "3f88b309776d772
 futures = "0.3.32"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tokio = "1.51.0"
+tokio = "1.52.1"
