@@ -6,8 +6,8 @@ edition = "2024"
 
 [dependencies]
 # use current git version for dependency updates, dependabot fixes
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "3f88b309776d772b87d66c389d552db793276717", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "c4efffcf6733b761eae9a2bb69306b34e37a005f", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
 futures = "0.3.32"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_cbor = "0.11.2"
-tokio = "1.52.1"
+tokio = "1.52.3"
