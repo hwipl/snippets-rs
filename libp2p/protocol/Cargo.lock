@@ -2037,7 +2037,6 @@ name = "protocol"
 version = "0.1.0"
 dependencies = [
  "futures",
- "futures-timer",
  "libp2p",
  "log",
  "tokio",

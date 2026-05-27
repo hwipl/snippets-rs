@@ -2,7 +2,6 @@
 
 use futures::future::BoxFuture;
 use futures::prelude::*;
-use futures_timer::Delay;
 use libp2p::core::{transport::PortUse, Endpoint, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use libp2p::swarm::handler::{
     ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
@@ -15,9 +14,10 @@ use libp2p::{Multiaddr, PeerId, StreamProtocol};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
+use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Duration;
 use std::{io, iter};
+use tokio::time::{sleep, Duration, Instant, Sleep};
 use void::Void;
 
 /// `HelloWorld` network behaviour.
@@ -123,11 +123,10 @@ impl NetworkBehaviour for HelloWorld {
     fn on_swarm_event(&mut self, _event: FromSwarm) {}
 
     fn poll(&mut self, _: &mut Context<'_>) -> Poll<ToSwarm<HelloWorldEvent, Void>> {
-        match self.events.pop_back() { Some(e) => {
-            Poll::Ready(ToSwarm::GenerateEvent(e))
-        } _ => {
-            Poll::Pending
-        }}
+        match self.events.pop_back() {
+            Some(e) => Poll::Ready(ToSwarm::GenerateEvent(e)),
+            _ => Poll::Pending,
+        }
     }
 }
 
@@ -137,7 +136,7 @@ impl NetworkBehaviour for HelloWorld {
 pub struct HelloWorldHandler {
     /// The timer used for the delay to the next hello world as well as
     /// the hello world timeout.
-    timer: Delay,
+    timer: Pin<Box<Sleep>>,
     /// Outbound hello world failures that are pending to be processed by `poll()`.
     pending_errors: VecDeque<HelloWorldFailure>,
     /// The outbound hello world state.
@@ -152,7 +151,7 @@ impl HelloWorldHandler {
     /// Builds a new `HelloWorldHandler`.
     pub fn new() -> Self {
         HelloWorldHandler {
-            timer: Delay::new(Duration::new(5, 0)),
+            timer: Box::pin(sleep(Duration::new(5, 0))),
             pending_errors: VecDeque::with_capacity(2),
             outbound: None,
             inbound: None,
@@ -189,7 +188,9 @@ impl ConnectionHandler for HelloWorldHandler {
                 protocol,
                 info: _,
             }) => {
-                self.timer.reset(Duration::new(5, 0));
+                self.timer
+                    .as_mut()
+                    .reset(Instant::now() + Duration::new(5, 0));
                 self.outbound = Some(HelloWorldState::HelloWorld(
                     send_hello_world(protocol).boxed(),
                 ));
@@ -247,7 +248,9 @@ impl ConnectionHandler for HelloWorldHandler {
                         }
                     }
                     Poll::Ready(Ok(stream)) => {
-                        self.timer.reset(Duration::new(5, 0));
+                        self.timer
+                            .as_mut()
+                            .reset(Instant::now() + Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::Idle(stream));
                         return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(Ok(
                             HelloWorldSuccess::Sent,
@@ -264,7 +267,9 @@ impl ConnectionHandler for HelloWorldHandler {
                         break;
                     }
                     Poll::Ready(()) => {
-                        self.timer.reset(Duration::new(5, 0));
+                        self.timer
+                            .as_mut()
+                            .reset(Instant::now() + Duration::new(5, 0));
                         self.outbound = Some(HelloWorldState::HelloWorld(
                             send_hello_world(stream).boxed(),
                         ));
