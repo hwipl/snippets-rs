@@ -6,8 +6,8 @@ edition = "2024"
 
 [dependencies]
 # use current git version for dependency updates, dependabot fixes
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "c4efffcf6733b761eae9a2bb69306b34e37a005f", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "macros", "request-response", "mdns"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "93c505994dfb99bf47f44a415d65d4eefa66ab02", features = ["tokio", "tcp", "tls", "noise", "yamux", "dns", "macros", "request-response", "mdns"] }
 futures = "0.3.32"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tokio = "1.52.3"
+tokio = "1.52.4"
