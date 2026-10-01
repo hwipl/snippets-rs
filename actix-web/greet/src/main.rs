@@ -7,7 +7,7 @@ async fn index() -> impl Responder {
 
 #[get("/hi")]
 async fn hi() -> impl Responder {
-    format!("hi")
+    "hi".to_string()
 }
 
 #[get("/hi/{name}")]
@@ -17,7 +17,7 @@ async fn hi_name(name: web::Path<String>) -> impl Responder {
 
 #[get("/bye")]
 async fn bye() -> impl Responder {
-    format!("bye")
+    "bye".to_string()
 }
 
 #[get("/bye/{name}")]
