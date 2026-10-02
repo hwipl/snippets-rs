@@ -20,7 +20,7 @@ fn main() -> diesel::QueryResult<()> {
 
     // create greetings
     let mut last_id = 0;
-    for g in vec!["hello", "hi", "good day", "greetings"] {
+    for g in ["hello", "hi", "good day", "greetings"] {
         let greeting = create_greeting(connection, g);
         println!("Created greeting {} {}", greeting.id, greeting.greeting);
         last_id = greeting.id;
