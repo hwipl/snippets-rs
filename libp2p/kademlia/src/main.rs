@@ -31,12 +31,9 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
                 kad::Event::InboundRequest { .. } => (),
                 kad::Event::OutboundQueryProgressed { result, .. } => {
                     // handle query result
-                    match result {
-                        QueryResult::GetRecord(Ok(FoundRecord(record))) => {
-                            handle_peer_records(record);
-                            return;
-                        }
-                        _ => (),
+                    if let QueryResult::GetRecord(Ok(FoundRecord(record))) = result {
+                        handle_peer_records(record);
+                        return;
                     }
                 }
                 kad::Event::RoutingUpdated { .. } => (),
@@ -47,24 +44,24 @@ async fn handle_events(swarm: &mut Swarm<kad::Behaviour<MemoryStore>>) {
             },
             SwarmEvent::NewListenAddr { address: addr, .. } => println!("Listening on {}", addr),
             SwarmEvent::ConnectionEstablished {
-                peer_id, endpoint, ..
+                peer_id,
+                endpoint: ConnectedPoint::Listener { send_back_addr, .. },
+                ..
             } => {
-                if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
-                    // add peer address to kademlia
-                    println!("Added address {:?} of peer {:?}", send_back_addr, peer_id);
-                    swarm.behaviour_mut().add_address(&peer_id, send_back_addr);
-                }
+                // add peer address to kademlia
+                println!("Added address {:?} of peer {:?}", send_back_addr, peer_id);
+                swarm.behaviour_mut().add_address(&peer_id, send_back_addr);
             }
             SwarmEvent::ConnectionClosed {
-                peer_id, endpoint, ..
+                peer_id,
+                endpoint: ConnectedPoint::Listener { send_back_addr, .. },
+                ..
             } => {
-                if let ConnectedPoint::Listener { send_back_addr, .. } = endpoint {
-                    // remove peer address from kademlia
-                    println!("Removed address {:?} of peer {:?}", send_back_addr, peer_id);
-                    swarm
-                        .behaviour_mut()
-                        .remove_address(&peer_id, &send_back_addr);
-                }
+                // remove peer address from kademlia
+                println!("Removed address {:?} of peer {:?}", send_back_addr, peer_id);
+                swarm
+                    .behaviour_mut()
+                    .remove_address(&peer_id, &send_back_addr);
             }
             _ => (),
         }
