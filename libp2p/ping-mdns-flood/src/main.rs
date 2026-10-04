@@ -98,7 +98,7 @@ fn handle_floodsub_event(swarm: &mut Swarm<PingBehaviour>, event: floodsub::Even
                     Ok(peer) => peer,
                     Err(_) => return,
                 };
-                if peer != swarm.local_peer_id().clone() {
+                if peer != *swarm.local_peer_id() {
                     return;
                 }
                 println!("Received ping reply from {:?}", message.source);
