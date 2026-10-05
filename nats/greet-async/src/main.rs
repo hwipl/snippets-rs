@@ -49,7 +49,7 @@ async fn main() -> Result<(), async_nats::Error> {
                 println!("Received message {:?}", g);
 
                 // reply
-                if g.from != name && g.to == "" {
+                if g.from != name && g.to.is_empty() {
                     let r = Greeting {
                         from: name.clone(),
                         to: g.from,
