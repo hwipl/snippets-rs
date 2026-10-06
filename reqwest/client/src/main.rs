@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
 
     // print returned body
     let body = response.text().await?;
-    if body != "" {
+    if !body.is_empty() {
         println!("{}", body);
     }
 
