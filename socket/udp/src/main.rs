@@ -7,7 +7,7 @@ fn run_server() -> std::io::Result<()> {
     let mut buf = [0; 2048];
     loop {
         let (len, src) = socket.recv_from(&mut buf)?;
-        socket.send_to(&buf[..len], &src)?;
+        socket.send_to(&buf[..len], src)?;
     }
 }
 
