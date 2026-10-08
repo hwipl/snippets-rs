@@ -55,7 +55,7 @@ fn get_req_path(req: &Request<Incoming>) -> String {
 fn get_local_path(req: &Request<Incoming>) -> PathBuf {
     let path = get_req_path(req);
     let mut path = path.as_str();
-    if path.len() > 0 {
+    if !path.is_empty() {
         path = &path[1..];
     }
     env::current_dir().unwrap().join(path)
@@ -70,7 +70,7 @@ fn get_uri_path_parent(path: &str) -> String {
 }
 
 async fn is_local_dir(req: &Request<Incoming>) -> bool {
-    let path = get_local_path(&req);
+    let path = get_local_path(req);
     match tokio::fs::metadata(path).await {
         Ok(metadata) => metadata.is_dir(),
         Err(_) => false,
@@ -84,7 +84,7 @@ async fn get_local_dir_html(req: &Request<Incoming>) -> String {
         req_path,
         get_uri_path_parent(&req_path),
     );
-    let local_path = get_local_path(&req);
+    let local_path = get_local_path(req);
     if let Ok(mut entries) = tokio::fs::read_dir(local_path).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             if let Ok(filetype) = entry.file_type().await {
