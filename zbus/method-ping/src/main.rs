@@ -10,7 +10,7 @@ struct Ping;
 impl Ping {
     async fn ping(&self) -> String {
         println!("PING");
-        format!("PONG")
+        "PONG".to_string()
     }
 }
 
