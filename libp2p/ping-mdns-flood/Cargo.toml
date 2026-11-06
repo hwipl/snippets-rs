@@ -5,7 +5,8 @@ authors = ["hwipl"]
 edition = "2024"
 
 [dependencies]
-libp2p = { version = "0.57.1", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
+# use current git version for dependency updates, dependabot fixes
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "acf0859feadf15ef418bc6e5e40e84b1b5b0db56", features = ["tokio", "mdns", "tcp", "tls", "noise", "yamux", "dns", "macros", "floodsub", "mdns"] }
 futures = "0.3.34"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_cbor = "0.11.2"
